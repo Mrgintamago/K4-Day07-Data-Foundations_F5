@@ -12,12 +12,15 @@ Tham số:
     --member    tên module chiến lược trong src/strategies (mặc định: quang)
     --top-k     số kết quả lấy ra mỗi câu (mặc định: 3)
     --markdown  in thêm bảng Markdown dán thẳng vào REPORT_CANHAN_<Ten>.md
+    --overlap   chạy một mức overlap 0/50/150 cho thành viên Sáng
+    --sweep-overlap  chạy đủ ba mức overlap của Sáng trong một lệnh
 """
 from __future__ import annotations
 
 import argparse
 import importlib
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -126,9 +129,60 @@ def main() -> int:
     parser.add_argument("--member", default="quang", choices=sorted(MEMBER_MODULES))
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--markdown", action="store_true")
+    parser.add_argument(
+        "--overlap",
+        type=int,
+        metavar="N",
+        help="overlap của chiến lược Sáng; chọn một trong 0, 50, 150",
+    )
+    parser.add_argument(
+        "--sweep-overlap",
+        action="store_true",
+        help="chạy lần lượt cả ba cấu hình overlap 0, 50, 150 của Sáng",
+    )
     args = parser.parse_args()
 
     module = importlib.import_module(MEMBER_MODULES[args.member])
+
+    if args.member != "sang" and (args.overlap is not None or args.sweep_overlap):
+        parser.error("--overlap và --sweep-overlap chỉ dùng với --member sang")
+    if args.overlap is not None and args.sweep_overlap:
+        parser.error("chỉ chọn một trong --overlap hoặc --sweep-overlap")
+
+    if args.member == "sang":
+        overlap_candidates = tuple(module.OVERLAP_CANDIDATES)
+        if args.overlap is not None and args.overlap not in overlap_candidates:
+            parser.error(f"--overlap phải là một trong {overlap_candidates}")
+
+        if args.sweep_overlap:
+            for overlap in overlap_candidates:
+                print("\n" + "=" * 78, flush=True)
+                print(
+                    f"CHẠY CẤU HÌNH SÁNG: chunk_size={module.DEFAULT_CHUNK_SIZE}, overlap={overlap}",
+                    flush=True,
+                )
+                print("=" * 78 + "\n", flush=True)
+                command = [
+                    sys.executable,
+                    str(Path(__file__).resolve()),
+                    "--member",
+                    "sang",
+                    "--top-k",
+                    str(args.top_k),
+                    "--overlap",
+                    str(overlap),
+                ]
+                if args.markdown:
+                    command.append("--markdown")
+                subprocess.run(command, check=True)
+            return 0
+
+        if args.overlap is not None:
+            module.DEFAULT_OVERLAP = args.overlap
+        print(
+            f"Cấu hình chunking: chunk_size={module.DEFAULT_CHUNK_SIZE}, "
+            f"overlap={module.DEFAULT_OVERLAP}"
+        )
 
     embedder = select_embedder()
     backend = getattr(embedder, "_backend_name", embedder.__class__.__name__)
