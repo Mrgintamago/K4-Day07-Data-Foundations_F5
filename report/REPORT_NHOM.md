@@ -17,28 +17,56 @@
 **Chủ đề (cố định theo lớp K4):** Chính sách thương mại điện tử / hỗ trợ khách hàng (thanh toán, đổi trả, giao hàng, quyền riêng tư, điều kiện người bán…).
 
 **Phạm vi cụ thể nhóm tập trung:**
-> *1 câu — ví dụ: đổi trả + điều kiện người bán.*
+> **Vòng đời sau khi đặt hàng trên sàn TMĐT Việt Nam**: đổi trả & hoàn tiền (phía người mua),
+> quy định đăng bán & chế tài (phía người bán), trách nhiệm vận chuyển và bồi thường (đơn vị
+> giao hàng), và quyền riêng tư dữ liệu. Nhóm chọn phạm vi này vì nó cho phép đặt câu hỏi
+> **cùng chủ đề nhưng khác đối tượng** (buyer vs seller) — điều kiện cần để `search_with_filter()`
+> thực sự có tác dụng thay vì chỉ là tính năng trang trí.
 
 ### Danh sách tài liệu (Data Inventory)
 
+6 tài liệu, tất cả là trang chính sách công khai, thu thập bằng `scripts/fetch_public_pages.py`
+(có kiểm tra `robots.txt` trước mỗi request, giãn cách 1.5 giây).
+
 | # | Tên tài liệu | Nguồn (Source URL) | Ngày lấy / Phiên bản | Số ký tự | Metadata đã gán |
 |---|--------------|------------|--------------------|----------|-----------------|
-| 1 | | | | | |
-| 2 | | | | | |
-| 3 | | | | | |
-| 4 | | | | | |
-| 5 | | | | | |
+| 1 | Chính sách trả hàng và hoàn tiền Shopee | https://help.shopee.vn/portal/4/article/77251 | 2026-08-03 / not-stated | 19.616 | `doc_id=shopee-returns-refund-policy`, `customer_role=buyer`, `category=returns`, `language=vi` |
+| 2 | Chính sách cấm/hạn chế sản phẩm Shopee | https://help.shopee.vn/portal/4/article/77247 | 2026-08-03 / not-stated | 12.857 | `doc_id=shopee-prohibited-products`, `customer_role=seller`, `category=prohibited`, `language=vi` |
+| 3 | Chính sách bảo mật Shopee | https://help.shopee.vn/portal/4/article/77244 | 2026-08-03 / not-stated | 43.112 | `doc_id=shopee-privacy-policy`, `customer_role=both`, `category=privacy`, `language=vi` |
+| 4 | FAQ xử lý đổi–trả–bảo hành cho Nhà Bán (Tiki) | https://hocvien.tiki.vn/faq/cau-hoi-thuong-gap-ve-xu-ly-doi-tra-bao-hanh/ | 2026-08-03 / not-stated | 15.440 | `doc_id=tiki-seller-warranty-faq`, `customer_role=seller`, `category=warranty`, `language=vi` |
+| 5 | Chính sách bồi thường Giao Hàng Nhanh | https://ghn.vn/pages/chinh-sach-boi-thuong-cua-ghn | 2026-08-03 / not-stated | 15.691 | `doc_id=ghn-compensation-policy`, `customer_role=both`, `category=shipping`, `language=vi` |
+| 6 | Điều khoản sử dụng dịch vụ Giao Hàng Nhanh | https://ghn.vn/pages/dieu-khoan-su-dung | 2026-08-03 / not-stated | 3.798 | `doc_id=ghn-terms-of-service`, `customer_role=both`, `category=terms`, `language=vi` |
+
+**Tổng: 110.514 ký tự.** Kiểm kê đầy đủ ở `data/k4_ecommerce/sources.csv` (khớp 1:1 với file `.md`).
+
+`document_version = not-stated` vì cả 6 trang nguồn đều **không công bố số phiên bản hay ngày
+hiệu lực** trên trang. Nhóm ghi đúng như `docs/DATA_COLLECTION.md` quy định thay vì bịa số hiệu.
+
+**Hai nguồn đã loại bỏ:** trang đổi trả của Tiki (`hotro.tiki.vn`) và trang hoàn tiền của Lazada
+(`lazada.vn/helpcenter`) là **trang render bằng JavaScript** — crawler chỉ lấy được vỏ HTML rỗng.
+Nhóm không dùng nội dung không trích xuất được thay vì để chunk rác vào store. Trang
+`thegioididong.com` bị `robots.txt` chặn nên nhóm **không crawl**.
 
 **Danh sách kiểm tra quản trị dữ liệu (Data governance checklist):**
-- [ ] Tập tài liệu (Corpus) chỉ chứa nguồn công khai/được phép dùng và không chứa dữ liệu cá nhân, thông tin đăng nhập hoặc tài liệu nội bộ.
-- [ ] Mỗi tài liệu có `source_url`, `retrieved_at`, `document_version` (hoặc ngày hiệu lực) trong metadata.
+- [x] Tập tài liệu (Corpus) chỉ chứa nguồn công khai/được phép dùng và không chứa dữ liệu cá nhân, thông tin đăng nhập hoặc tài liệu nội bộ.
+- [x] Mỗi tài liệu có `source_url`, `retrieved_at`, `document_version` (hoặc ngày hiệu lực) trong metadata.
+- [x] `robots.txt` được kiểm tra trước mỗi request; nguồn bị chặn (`thegioididong.com`) đã bị loại, không tìm cách lách.
+- [x] Giãn cách tối thiểu 1.5 giây giữa các request, có `User-Agent` định danh rõ.
+- [x] Đã xóa 2 file khởi động placeholder (`example.com`) và mọi dòng `example-template-replace-me` trong `sources.csv`.
 
 ### Cấu trúc Metadata (Metadata Schema)
 
 | Trường metadata | Kiểu | Ví dụ giá trị | Tại sao hữu ích cho truy xuất (retrieval)? |
 |----------------|------|---------------|-------------------------------|
-| | | | |
-| | | | |
+| `doc_id` | string | `shopee-returns-refund-policy` | Khóa định danh tài liệu; `delete_document()` và mọi thao tác lọc theo tài liệu đều dựa vào trường này. Được gắn lên **từng chunk**, không chỉ tài liệu gốc. |
+| `customer_role` | enum `buyer`/`seller`/`both` | `seller` | **Trường lọc quan trọng nhất của K4.** Corpus có nhiều tài liệu cùng nói về "đổi trả" nhưng khác đối tượng; không lọc thì câu hỏi phía người bán bị tài liệu phía người mua chen vào top-3 (xem phân tích câu 1 ở Phần 3). |
+| `category` | enum | `returns`, `prohibited`, `privacy`, `warranty`, `shipping`, `terms` | Thu hẹp theo loại chính sách khi câu hỏi đã rõ chủ đề; hữu ích khi `customer_role` quá rộng (nhiều tài liệu là `both`). |
+| `source_url` | URL | `https://help.shopee.vn/portal/4/article/77251` | Truy vết câu trả lời về đúng trang gốc — điều kiện để kiểm chứng gold answer và để người đọc tự xác minh. |
+| `retrieved_at` | date | `2026-08-03` | Kiểm tra độ mới của chính sách; chính sách TMĐT thay đổi thường xuyên nên biết ngày lấy là bắt buộc. |
+| `document_version` | string | `not-stated` | Phân biệt phiên bản chính sách khi nguồn có công bố; ghi `not-stated` khi nguồn không nêu. |
+| `language` | string | `vi` | Dự phòng cho corpus đa ngữ; hiện toàn bộ là tiếng Việt nên chưa dùng để lọc. |
+| `chunk_index` | int | `12` | Vị trí chunk trong tài liệu — dùng để lấy chunk liền kề khi cần mở rộng ngữ cảnh. |
+| `parent_heading` | string | `7. TRÁCH NHIỆM VỀ CHI PHÍ VẬN CHUYỂN…` | *(chỉ có ở chiến lược `SemanticParentChunker` của Quang)* Lưu tiêu đề mục cha tách khỏi phần đem đi nhúng, cho phép điều khiển mức tiêu đề ảnh hưởng lên vector. |
 
 ---
 

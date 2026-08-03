@@ -70,6 +70,13 @@ Giải thích cách tiếp cận của bạn khi lập trình (implement) các p
 **`answer`** — hướng tiếp cận:
 > Đúng 3 bước RAG: **retrieve → build prompt → generate**. Ngữ cảnh được ghép từ top-k chunk, mỗi chunk gắn nhãn `[Nguồn N] (doc_id=..., score=...)` để khi chấm **grounding quality** tôi chỉ ra được chính xác chunk nào tạo ra câu trả lời. Prompt ràng buộc rõ "chỉ dùng thông tin trong phần NGỮ CẢNH, nếu không đủ thì nói không biết" nhằm giảm bịa đặt (hallucination). Trường hợp store rỗng → trả thẳng một câu thông báo thay vì gọi LLM với ngữ cảnh trống.
 
+### Chiến lược riêng cho Giai đoạn 2
+
+**`SemanticParentChunker`** (`src/strategies/quang_semantic.py`) — hướng tiếp cận:
+> Tôi đặt file này **ngoài** gói `src` cốt lõi để không đụng vào phần chung của nhóm (`src/chunking.py` đang pass 42/42 test, cả 5 người dùng chung). Nó **dùng lại** hai thứ đã viết ở Giai đoạn 1: `compute_similarity` để đo khoảng cách ngữ nghĩa giữa các câu, và `RecursiveChunker` làm cơ chế cắt phụ khi một đoạn ngữ nghĩa vượt `max_chunk_size`.
+>
+> Điểm cần xử lý về mặt kỹ thuật: interface chuẩn của lab là `chunk(text) -> list[str]`, tức phần đem đi **nhúng** và phần **trả về** buộc phải là một. Để tách được hai thứ đó (small-to-big retrieval), tôi thêm `chunk_with_parents()` trả về `(nội_dung, tiêu_đề_cha)` và một hàm nạp riêng `build_store()` đưa tiêu đề vào `metadata["parent_heading"]`. Nhờ vậy vector chỉ mã hóa phần tôi chọn, còn ngữ cảnh cha vẫn đi kèm kết quả `search()` — tận dụng đúng chỗ `EmbeddingStore` trả nguyên vẹn `metadata`. Chi tiết kết quả ở Phần 5.
+
 ---
 
 ## 3. Hoàn thiện code (Core Implementation) — Cá nhân (30 điểm)
@@ -274,6 +281,10 @@ với "**những dữ liệu gì**" chỉ ở một danh từ, mà mô hình 384
 → *Cách sửa:* tăng `top_k` lên 5 và thêm bước rerank, hoặc chia tài liệu privacy thành nhiều file
 nhỏ theo mục lớn để mỗi file có phạm vi hẹp hơn.
 
+**Điều hay nhất tôi học được từ thành viên khác / nhóm khác (qua demo):**
+> *(điền sau buổi demo — dự kiến so sánh chiến lược của mình với `FAQPairChunker` ở câu 4 và với
+> `FixedSizeChunker` overlap cao ở câu 1)*
+
 ---
 
 ## Tự Đánh Giá (Phần Cá Nhân)
@@ -284,5 +295,5 @@ nhỏ theo mục lớn để mỗi file có phạm vi hẹp hơn.
 | Hướng tiếp cận của tôi (My Approach) | 9 / 10 |
 | Hoàn thiện code (Core Implementation — tests) | 30 / 30 (42/42 test pass) |
 | Dự đoán độ tương tự (Similarity Predictions) | 5 / 5 (đúng 5/5, có phản ngẫm) |
-| Kết quả truy xuất của tôi (Competition Results) | 8 / 10 (câu 2 và 5 chỉ đạt 1 điểm) |
+| Kết quả truy xuất của tôi (Competition Results) | 8 / 10 (câu 1 và 5 chỉ đạt 1 điểm) |
 | **Tổng phần cá nhân** | **57 / 60** |
