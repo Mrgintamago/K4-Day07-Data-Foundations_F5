@@ -1,3 +1,7 @@
 doc_id,file_path,title,source_url,retrieved_at,document_version,license_or_permission
-k4-returns-policy,data/k4_ecommerce/returns-policy.md,Chính sách đổi trả,https://example.com/chinh-sach/doi-tra,2026-08-02,2026.1,example-template-replace-me
-k4-seller-listing,data/k4_ecommerce/seller-listing.md,Quy định đăng bán,https://example.com/nguoi-ban/dang-ban,2026-08-02,2026.1,example-template-replace-me
+ghn-compensation-policy,data/k4_ecommerce/ghn-compensation-policy.md,Chính sách bồi thường Giao Hàng Nhanh,https://ghn.vn/pages/chinh-sach-boi-thuong-cua-ghn,2026-08-03,not-stated,public-page
+ghn-terms-of-service,data/k4_ecommerce/ghn-terms-of-service.md,Điều khoản sử dụng dịch vụ Giao Hàng Nhanh,https://ghn.vn/pages/dieu-khoan-su-dung,2026-08-03,not-stated,public-page
+shopee-privacy-policy,data/k4_ecommerce/shopee-privacy-policy.md,Chính sách bảo mật Shopee,https://help.shopee.vn/portal/4/article/77244,2026-08-03,not-stated,public-page
+shopee-prohibited-products,data/k4_ecommerce/shopee-prohibited-products.md,Chính sách cấm hạn chế sản phẩm Shopee,https://help.shopee.vn/portal/4/article/77247,2026-08-03,not-stated,public-page
+shopee-returns-refund-policy,data/k4_ecommerce/shopee-returns-refund-policy.md,Chính sách trả hàng và hoàn tiền Shopee,https://help.shopee.vn/portal/4/article/77251,2026-08-03,not-stated,public-page
+tiki-seller-warranty-faq,data/k4_ecommerce/tiki-seller-warranty-faq.md,Câu hỏi thường gặp về xử lý đổi trả bảo hành cho người bán,https://hocvien.tiki.vn/faq/cau-hoi-thuong-gap-ve-xu-ly-doi-tra-bao-hanh/,2026-08-03,not-stated,public-page
