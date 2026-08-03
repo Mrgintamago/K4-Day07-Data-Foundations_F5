@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv  # noqa: E402
+from llm_backends import safe_llm, select_llm  # noqa: E402
 
 from ingest import build_knowledge_base  # noqa: E402
 from src.agent import KnowledgeBaseAgent  # noqa: E402
@@ -104,17 +105,6 @@ def select_embedder():
     return _mock_embed
 
 
-def demo_llm(prompt: str) -> str:
-    """LLM giả lập: trích nguyên văn ngữ cảnh đã truy xuất để kiểm tra grounding."""
-    marker = "[Nguồn 1]"
-    if marker in prompt:
-        body = prompt.split(marker, 1)[1]
-        body = body.split("[Nguồn 2]", 1)[0]
-        body = body.split("\n", 1)[-1].strip()
-        return f"(dựa trên Nguồn 1) {body[:280]}..."
-    return "Không đủ ngữ cảnh để trả lời."
-
-
 def build_store_for(member: str, module, embedder):
     """Nạp store theo chiến lược của thành viên.
 
@@ -147,10 +137,13 @@ def main() -> int:
     if backend == "mock embeddings fallback":
         print("CẢNH BÁO: mock KHÔNG phản ánh ngữ nghĩa. Đặt EMBEDDING_PROVIDER=local rồi chạy lại.\n")
 
+    llm_fn, llm_name = select_llm()
+    print(f"Backend LLM: {llm_name}")
+
     store = build_store_for(args.member, module, embedder)
     print(f"Đã nạp {store.get_collection_size()} chunk từ {DATA_DIR}\n")
 
-    agent = KnowledgeBaseAgent(store=store, llm_fn=demo_llm)
+    agent = KnowledgeBaseAgent(store=store, llm_fn=safe_llm(llm_fn))
     rows = []
     hits = 0
 

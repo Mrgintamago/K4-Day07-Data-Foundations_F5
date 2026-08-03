@@ -53,7 +53,20 @@ EMBEDDING_PROVIDER=local
 LOCAL_EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 HF_HUB_DISABLE_SYMLINKS_WARNING=1
 LAB_DATA_DIR=data/k4_ecommerce
+
+# LLM cho KnowledgeBaseAgent — bỏ trống thì dùng stub (chỉ trích nguyên văn Nguồn 1)
+LLM_PROVIDER=auto
+# ANTHROPIC_API_KEY=sk-ant-...      # rồi: pip install anthropic
+# OPENAI_API_KEY=sk-...             # rồi: pip install openai
 ```
+
+> ⚠️ **KHÔNG BAO GIỜ** commit khóa API. `.env` đã nằm trong `.gitignore` — kiểm tra bằng
+> `git status --short --ignored | grep .env` phải thấy dấu `!!`.
+
+**Vì sao nên cấu hình LLM thật:** rubric cho **2 điểm/câu** chỉ khi *"top-3 chứa chunk liên quan
+**VÀ** câu trả lời của agent chính xác"*. Với stub, agent chỉ trích nguyên văn Nguồn 1 nên không
+thể tổng hợp từ nhiều chunk — nhiều câu sẽ bị tự chấm 1 điểm oan. `scripts/llm_backends.py` tự dò
+key nào có trong `.env`; không có key nào thì rơi về stub, benchmark vẫn chạy bình thường.
 
 Có `.env` rồi thì **không cần** gõ `EMBEDDING_PROVIDER=local` trước mỗi lệnh nữa — `load_dotenv()`
 đã được gọi sẵn trong `main.py`, `scripts/run_benchmark.py`, `scripts/similarity_demo.py`.
