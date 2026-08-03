@@ -97,13 +97,45 @@ Chạy `ChunkingStrategyComparator().compare()` trên 2-3 tài liệu:
 
 > **Đúng 5 câu hỏi**, đa dạng, có thể kiểm chứng; **ít nhất 1 câu** cần lọc metadata mới trả lời tốt. Đây là bộ câu hỏi chung cho mọi thành viên chạy.
 
+Bộ câu hỏi này được khóa trong mã nguồn tại `scripts/run_benchmark.py` (hằng `QUERIES`) để
+đảm bảo cả 5 thành viên chạy **đúng cùng một bộ**, không ai sửa lệch.
+
 | # | Câu hỏi (Query) | Câu trả lời chuẩn (Gold Answer) | Chunk nào chứa thông tin? |
 |---|-------|-------------------------------|--------------------------|
-| 1 | | | |
-| 2 | | | |
-| 3 | | | |
-| 4 | | | |
-| 5 | | | |
+| 1 | Người mua có bao nhiêu ngày để gửi yêu cầu trả hàng/hoàn tiền sau khi đơn hàng giao thành công? | **15 (mười lăm) ngày** kể từ lúc đơn hàng được cập nhật giao hàng thành công. Riêng thực phẩm **tươi sống và đông lạnh: 24 giờ**. | `shopee-returns-refund-policy` — **mục 3.2** |
+| 2 | Người bán bị áp dụng những chế tài nào nếu đăng bán sản phẩm thuộc danh mục cấm/hạn chế? | 5 nhóm chế tài: (i) sản phẩm bị xóa; (ii) tài khoản bị giới hạn quyền; (iii) tài khoản bị đình chỉ hoặc xóa; (iv) cấn trừ số dư, phong tỏa quyền rút tiền; (v) chế tài khác theo pháp luật (phạt hành chính, xử lý hình sự, bồi thường thiệt hại). | `shopee-prohibited-products` — **mục 3** |
+| 3 | Ai chịu chi phí vận chuyển chiều hoàn trả sản phẩm? | **Người Bán** chịu, trong 3 trường hợp: Shopee chấp thuận yêu cầu trả hàng/hoàn tiền không do lỗi Người Mua hoặc đơn vị vận chuyển; đơn giao không thành công; các ngoại lệ khác theo quyết định của Shopee. | `shopee-returns-refund-policy` — **mục 7.1** |
+| 4 | Thời gian Nhà Bán cam kết bảo hành tối đa là bao lâu? | **Tối đa không quá 30 ngày**, tính từ thời điểm Nhà Bán nhận được hàng đến khi bảo hành xong — **không tính thời gian vận chuyển**. | `tiki-seller-warranty-faq` — **câu hỏi số 5** |
+| 5 | Shopee thu thập dữ liệu cá nhân của người dùng từ những nguồn nào? | Từ chính bạn, các công ty liên kết, các bên thứ ba và nguồn khác: đối tác kinh doanh (đơn vị vận chuyển, thanh toán), cơ quan đánh giá tín dụng, đối tác marketing/giới thiệu/khách hàng thân thiết, người dùng khác, và các nguồn dữ liệu công khai hoặc của nhà nước. | `shopee-privacy-policy` — **mục 2.2** |
+
+**Câu bắt buộc dùng metadata filter** (theo `K4_VARIANT.md`):
+
+| # | `metadata_filter` | Vì sao cần |
+|---|---|---|
+| 2 | `{"customer_role": "seller"}` | Chế tài chỉ áp dụng cho Người Bán; không lọc thì tài liệu phía người mua chen vào top-3 |
+| 4 | `{"customer_role": "seller"}` | "Nhà Bán cam kết bảo hành" là nghĩa vụ của người bán, nằm trong tài liệu dành riêng cho seller |
+
+**Vì sao 5 câu này đa dạng** (yêu cầu của `exercises.md` bài 3.2): mỗi câu thử một điểm yếu
+khác nhau của chunking —
+
+| # | Dạng câu hỏi | Thử điểm yếu nào |
+|---|---|---|
+| 1 | Con số / thời hạn cụ thể | Chunk bị cắt giữa câu chứa con số |
+| 2 | Danh sách liệt kê nhiều mục | Chunk quá nhỏ làm đứt danh sách |
+| 3 | Quy trách nhiệm (ai chịu gì) | Tiêu đề mục mang thông tin, thân mục thiếu ngữ cảnh |
+| 4 | Cam kết dịch vụ dạng FAQ | Lợi thế của chunking theo cặp Hỏi–Đáp |
+| 5 | Tổng hợp nguồn, tài liệu rất dài | Nhiều mục cùng chủ đề cạnh tranh nhau |
+
+**Kiểm chứng gold answer:** cả 5 câu trả lời chuẩn đều được trích nguyên văn từ corpus của nhóm
+(không dùng nguồn ngoài), có thể kiểm tra lại bằng:
+
+```bash
+grep -n "15 (mười lăm) ngày"            data/k4_ecommerce/shopee-returns-refund-policy.md
+grep -n "(i) Sản phẩm bị xóa"            data/k4_ecommerce/shopee-prohibited-products.md
+grep -n "Người Bán sẽ chịu chi phí"      data/k4_ecommerce/shopee-returns-refund-policy.md
+grep -n "tối đa không quá 30 ngày"       data/k4_ecommerce/tiki-seller-warranty-faq.md
+grep -n "cơ quan đánh giá tín dụng"      data/k4_ecommerce/shopee-privacy-policy.md
+```
 
 ### Tổng hợp chất lượng truy xuất của nhóm
 
