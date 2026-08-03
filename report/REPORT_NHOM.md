@@ -239,28 +239,101 @@ class ThanhRecursiveChunker:
 
 **Thành viên 3 — Trần Quang Sáng (2A202601446)** · `src/strategies/sang_fixed.py`
 
-- **Loại chiến lược:** `FixedSizeChunker` (dựng sẵn), tinh chỉnh `overlap`
-- **Mô tả & lý do chọn:** *(Sáng điền — điểm ăn tiền: tìm một câu hỏi mà `overlap=0` fail nhưng
-  `overlap=150` pass, dán top-3 của cả hai lần chạy)*
-- **Tham số cuối / số chunk / điểm:** *(chờ)*
+- **Loại chiến lược:** `FixedSizeChunker` (dựng sẵn), tinh chỉnh `overlap` — lớp bọc `SangFixedChunker`
+- **Mô tả & lý do chọn cho chủ đề này:** Giữ `chunk_size=500` để mọi chunk có độ dài **đồng đều nhất
+  nhóm**, nhờ đó điểm similarity so sánh công bằng giữa các chunk thay vì bị chunk quá ngắn/quá dài
+  làm nhiễu bảng xếp hạng. Biến số duy nhất được tinh chỉnh là `overlap`: nâng lên **150 ký tự (30%
+  chunk_size)** để một điều khoản nằm vắt ngang ranh giới vẫn xuất hiện trọn vẹn trong ít nhất một
+  chunk — vấn đề cố hữu của cắt cứng theo ký tự. Lớp bọc thêm kiểm tra đầu vào (`overlap < chunk_size`)
+  để bước trượt luôn dương.
+- **Quét tham số** (3 mức overlap, đo trên **toàn corpus** 110.514 ký tự):
+
+| `overlap` | Số chunk | Tổng ký tự lưu | Hệ số dư thừa |
+|---|---|---|---|
+| 0 | 224 | 110.514 | 1,00x |
+| 50 | 248 | 122.614 | 1,11x |
+| **150** ← chọn | **316** | 157.014 | **1,42x** |
+
+  Đây là đánh đổi rõ ràng bằng số: `overlap=150` phải **nhúng và lưu nhiều hơn 42%** so với không
+  overlap. Sáng chấp nhận cái giá đó để đổi lấy khả năng không cắt đứt điều khoản.
+- **Tham số cuối:** `chunk_size=500`, `overlap=150` → **316 chunk**, đạt **3/10** (top-3).
+- **Kết quả & phân tích:** Đây là điểm thấp nhất nhóm, **nhưng con số 3/10 gây hiểu lầm**. Quét sâu
+  top-50 cho thấy chunk gold của Sáng nằm ở hạng **11, 2, 5, 1, 5** — tức 2 câu chỉ **trượt sát ngưỡng
+  top-3** (hạng 4–5), không phải retrieval hỏng. Nếu rubric dùng `top_k=5` thay vì 3, Sáng được **5/10**
+  và khoảng cách với nhóm dẫn đầu co lại còn 3 điểm.
+- **Điểm yếu thật sự đã bộc lộ:** cắt cứng theo ký tự khiến chunk **mở đầu và kết thúc giữa câu**, nên
+  vector mang nghĩa lẫn lộn của hai điều khoản kề nhau. Hệ quả nghiêm trọng nhất xuất hiện khi nối LLM
+  thật: ở câu 1, agent của Sáng **bịa ra "trong vòng 03–05 ngày làm việc"** — con số không tồn tại
+  trong bất kỳ tài liệu nào của corpus; ở câu 3, agent trả lời **"Người Mua chịu chi phí"** trong khi
+  mục 7.1 ghi rõ **Người Bán** chịu. Chunk "gần đúng" nguy hiểm hơn chunk sai hẳn, vì nó khiến LLM
+  tưởng đủ dữ kiện và tự suy diễn nốt phần thiếu.
 
 ---
 
 **Thành viên 4 — Cao Các Tường (2A202601236)** · `src/strategies/tuong_sentence.py`
 
-- **Loại chiến lược:** `SentenceChunker` (dựng sẵn), tinh chỉnh `max_sentences_per_chunk`
-- **Mô tả & lý do chọn:** *(Tường điền — nhiệm vụ đặc biệt: chứng minh bằng số liệu vì sao chiến lược
-  này KHÔNG hợp văn bản chính sách; in ra chunk ngắn nhất và dài nhất làm bằng chứng cho độ lệch 41x)*
-- **Tham số cuối / số chunk / điểm:** *(chờ)*
+- **Loại chiến lược:** `SentenceChunker` (dựng sẵn), tinh chỉnh `max_sentences_per_chunk` — lớp bọc
+  `TuongSentenceChunker`
+- **Mô tả & lý do chọn cho chủ đề này:** Ưu điểm cốt lõi là **không bao giờ cắt giữa câu**, nên mọi
+  chunk đọc trôi chảy và agent trích dẫn được nguyên câu. Tường chọn 4 câu/chunk để cân bằng hai rủi
+  ro đối nghịch: chunk quá ngắn (một tiêu đề đứng lẻ thành một chunk vô nghĩa) và chunk quá dài (gom
+  nhiều điều khoản khác nhau vào cùng một vector).
+- **Quét tham số** (trên `shopee-returns-refund-policy`, 19.616 ký tự):
+
+| `max_sentences_per_chunk` | Số chunk | Độ dài TB | Min | Max | Độ lệch |
+|---|---|---|---|---|---|
+| 2 | 71 | 274,0 | **26** | 958 | **36,8x** |
+| **4** ← chọn | 36 | 541,4 | 58 | 1021 | 17,6x |
+| 6 | 24 | 812,6 | 261 | 1455 | 5,6x |
+
+  Giá trị 2 bị loại vì sinh chunk **26 ký tự** — một tiêu đề đứng lẻ, vector cực nhiễu. Giá trị 6 có
+  độ lệch đẹp nhất (5,6x) nhưng chunk trung bình 812 ký tự gom quá nhiều điều khoản. Chọn **4**.
+- **Tham số cuối:** `max_sentences_per_chunk=4` → **186 chunk** (ít nhất nhóm), đạt **7/10**.
+- **Kết quả & phân tích — đây là kết quả đi ngược dự đoán của cả nhóm.** Từ bảng baseline, nhóm đã
+  dự đoán `SentenceChunker` sẽ **thua** vì độ lệch dài/ngắn tệ nhất trong 3 chiến lược dựng sẵn
+  (41,0x ở cấu hình mặc định). Thực tế Tường xếp **hạng nhì với ít chunk nhất** — hiệu quả nhất về
+  chi phí nhúng: 186 chunk so với 326 của Thành mà điểm cao hơn 2 bậc.
+- **Vì sao dự đoán sai:** chỉ số hình dạng chunk (count, avg, min–max) đo **sự đồng đều**, không đo
+  **mật độ thông tin**. Chunk trọn 4 câu giữ nguyên một ý hoàn chỉnh, trong khi chunk 500 ký tự cắt
+  cứng hoặc chunk đệ quy 314 ký tự thường mang nửa ý. Bài học nhóm rút ra: **phải chạy benchmark thật,
+  không suy ra chất lượng truy xuất từ thống kê chunk.**
+- **Điểm yếu:** không mang tiêu đề mục, nên mất điểm đúng ở hai câu mà đáp án nằm trong tiêu đề —
+  câu 3 (gold ở hạng 2) và đặc biệt câu 5 (gold rơi xuống **hạng 20**).
 
 ---
 
 **Thành viên 5 — Lưu Nguyễn Ngọc Hân (2A202601386)** · `src/strategies/han_faq.py`
 
 - **Loại chiến lược:** custom — `FAQPairChunker` (cắt theo cặp Câu hỏi–Đáp án)
-- **Mô tả & lý do chọn:** *(Hân điền — kỳ vọng thắng áp đảo câu 4 vì câu hỏi trùng gần nguyên văn
-  FAQ số 5 của Tiki; nhớ nêu rõ cơ chế fallback cho 5/6 tài liệu không phải dạng FAQ)*
-- **Tham số cuối / số chunk / điểm:** *(chờ)*
+- **Mô tả & lý do chọn cho chủ đề này:** Nhận ra rằng **câu hỏi benchmark của người dùng có cùng dạng
+  với câu hỏi FAQ trong tài liệu**. Nếu mỗi chunk = 1 câu hỏi + toàn bộ đáp án của nó, embedding của
+  query khớp gần như trực tiếp với embedding của câu hỏi nằm trong chunk. Regex
+  `^\s*\d+\.\s+.+\?\s*$` bắt dòng đánh số kết thúc bằng dấu `?`; tài liệu có dưới 2 câu hỏi thì
+  **tự động fallback** sang `RecursiveChunker`. Cặp Q&A vượt `chunk_size=800` được cắt phụ nhưng
+  **lặp lại câu hỏi ở đầu mỗi mảnh** để không mảnh nào mất ngữ cảnh.
+- **Cơ chế fallback kích hoạt trên hầu hết corpus** (đo thực tế):
+
+| Tài liệu | Số câu hỏi FAQ nhận diện | Chế độ | Chunk |
+|---|---|---|---|
+| `tiki-seller-warranty-faq` | **28** | FAQ pair | 32 |
+| `shopee-privacy-policy` | 6 | FAQ pair | 88 |
+| `shopee-returns-refund-policy` | 0 | fallback Recursive | 31 |
+| `shopee-prohibited-products` | 0 | fallback Recursive | 19 |
+| `ghn-compensation-policy` | 0 | fallback Recursive | 25 |
+| `ghn-terms-of-service` | 0 | fallback Recursive | 6 |
+
+  Chỉ **2/6 tài liệu** chạy đúng chế độ FAQ; 4 tài liệu còn lại thực chất chạy như `RecursiveChunker`.
+  Đây là giới hạn phải nêu thẳng: lợi thế của chiến lược bị pha loãng trên phần lớn corpus, nên **không
+  thể nhận công cho toàn bộ kết quả**.
+- **Tham số cuối:** `chunk_size=800`, `min_faq_questions=2` → **201 chunk**, đạt **5/10**.
+- **Kết quả & phân tích:** Giả thuyết ban đầu được xác nhận ở đúng chỗ dự đoán — **câu 4 đạt hạng 1
+  với điểm +0,8226**, cao nhất toàn nhóm cho câu đó, vì câu hỏi benchmark trùng gần nguyên văn tiêu
+  đề FAQ số 5 của Tiki. Câu 1 cũng đạt hạng 1. Nhưng ở 3 câu còn lại, tài liệu nguồn không phải FAQ
+  nên chiến lược rơi về fallback và mất lợi thế: gold ở hạng 2, 4 và **15**.
+- **Phát hiện phụ đáng chú ý:** `shopee-privacy-policy` bị nhận nhầm là FAQ (6 "câu hỏi" — thực ra là
+  các tiêu đề mục dạng nghi vấn như *"SHOPEE SẼ THU THẬP NHỮNG DỮ LIỆU GÌ?"*), tạo ra **88 chunk** từ
+  một tài liệu. Cắt theo mốc nghi vấn ở đây là sai ngữ nghĩa, và đó là một phần lý do câu 5 rơi xuống
+  hạng 15.
 
 ### So Sánh Giữa Các Thành Viên
 
@@ -400,6 +473,45 @@ từ corpus (`GOLD_MARKERS`), chặt hơn cách chỉ so `doc_id`.
 3. **Nhiều chunk hơn ≠ tốt hơn.** Sáng 316 chunk được 3/10, Tường 186 chunk được 7/10. Chia càng
    nhỏ càng làm loãng: mỗi chunk mang ít ngữ cảnh hơn nên top-3 dễ bị các mảnh vụn cùng chủ đề
    chiếm chỗ.
+
+### Phân tích độ nhạy: điểm thấp không đồng nghĩa retrieval hỏng
+
+Nhóm quét sâu tới **top-50** để tìm hạng THẬT của chunk gold, thay vì chỉ biết "có/không trong top-3":
+
+| | Câu 1 | Câu 2 | Câu 3 | Câu 4 | Câu 5 |
+|---|---|---|---|---|---|
+| Quang | **12** | 1 | 1 | 1 | 1 |
+| Cao Các Tường | 1 | 1 | 2 | 1 | **20** |
+| Lê Quý Thành | 1 | 3 | **4** | 1 | **19** |
+| Lưu Nguyễn Ngọc Hân | 1 | 2 | **4** | 1 | **15** |
+| Trần Quang Sáng | **11** | 2 | **5** | 1 | **5** |
+
+Bảng này tách hai loại thất bại vốn bị gộp làm một khi chỉ nhìn `top_k=3`:
+
+- **Trượt sát nút (hạng 4–5):** Thành ở câu 3, Hân ở câu 3, Sáng ở câu 3 và câu 5. Chiến lược đã xếp
+  chunk gold gần đúng, chỉ thiếu 1–2 bậc. Đây **không phải** lỗi thiết kế chiến lược.
+- **Hỏng hẳn (hạng 11–20):** câu 5 với Tường/Thành/Hân (hạng 15–20), câu 1 với Quang và Sáng
+  (hạng 11–12). Ở đây chunk gold bị hàng chục chunk khác vượt mặt — vấn đề thật sự về chiến lược.
+
+Nếu rubric dùng `top_k=5` thay vì 3, bảng điểm đổi hẳn:
+
+| | `top_k=3` (rubric) | `top_k=5` | Chênh |
+|---|---|---|---|
+| Quang | 8/10 | 8/10 | — |
+| Cao Các Tường | 7/10 | 7/10 | — |
+| Lê Quý Thành | 5/10 | **6/10** | +1 |
+| Lưu Nguyễn Ngọc Hân | 5/10 | **6/10** | +1 |
+| Trần Quang Sáng | **3/10** | **5/10** | **+2** |
+
+Khoảng cách giữa người cao nhất và thấp nhất co từ **5 điểm xuống 3 điểm**. Nhóm giữ `top_k=3` cho
+bảng điểm chính thức vì `docs/SCORING.md` quy định như vậy, nhưng ghi nhận rằng **3/10 của Sáng phản
+ánh một ngưỡng cắt hơn là một chiến lược kém** — hai câu của Sáng chỉ đứng hạng 5.
+
+**Điểm hội tụ của cả nhóm là câu 5.** Bốn trên năm người có gold ở hạng 15–20; chỉ Quang đạt hạng 1.
+`shopee-privacy-policy.md` dài 43.112 ký tự với hàng chục mục đều xoay quanh động từ "thu thập", nên
+mọi chunk không mang tiêu đề mục đều bị nhấn chìm. Đây là bằng chứng mạnh nhất cho luận điểm chính
+của nhóm: **với tài liệu dài và lặp từ khóa, tiêu đề mục phải nằm trong vector, nếu không retrieval
+không có cách nào phân biệt các mục với nhau.**
 
 ### Cảnh báo quan trọng: retrieval sai + LLM không từ chối = câu trả lời SAI TỰ TIN
 
