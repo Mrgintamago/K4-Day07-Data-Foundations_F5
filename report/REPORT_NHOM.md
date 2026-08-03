@@ -345,6 +345,39 @@ class ThanhRecursiveChunker:
 | Lê Quý Thành | `ThanhRecursiveChunker` (Recursive tuned) | **326** | 5/10 | Thắng câu 1 với **điểm cao nhất nhóm (+0,8052)**; tự thích ứng mọi loại tài liệu, không cần regex | Nhiều chunk nhất nhưng điểm thấp nhất — chia nhỏ làm loãng top-3. Mất trắng câu 3 và 5 |
 | Trần Quang Sáng | `FixedSizeChunker` (tuned, overlap=150) | 316 | **3/10** | Kích thước chunk đều nhất → điểm similarity so sánh công bằng | Cắt giữa câu. **Nguy hiểm nhất: 2 câu trả lời SAI mà agent vẫn tự tin** (câu 1 bịa "03–05 ngày", câu 3 nói ngược Người Mua/Người Bán) |
 
+### Độ nhạy tham số: dư địa còn lại của từng chiến lược
+
+Sau khi có đủ 5 kết quả, nhóm quét thêm **21 cấu hình tham số** (chỉ đo phần truy xuất, không tốn
+quota API) để tách hai câu hỏi khác nhau: *"chiến lược này yếu"* hay *"cấu hình này chưa tối ưu"*.
+
+| Thành viên | Cấu hình đang nộp | Điểm | Cấu hình tốt nhất tìm được | Điểm | Dư địa |
+|---|---|---|---|---|---|
+| Cao Các Tường | `max_sentences=4` | **7/10** | `max_sentences=4` hoặc `5` | 7/10 | **0 — đã tối ưu** |
+| Quang | `heading_weight=2` | **8/10** | `heading_weight=2` | 8/10 | 0 — đã quét 3 giá trị |
+| Lê Quý Thành | `chunk_size=500` | 5/10 | `chunk_size=300` hoặc `700` | **7/10** | +2 |
+| Lưu Nguyễn Ngọc Hân | `chunk_size=800` | 5/10 | `chunk_size=1600` | **6/10** | +1 |
+| Trần Quang Sáng | `500 / overlap=150` | 3/10 | `400 / overlap=120` | **7/10** | **+4** |
+
+**Ba điều bảng này cho thấy:**
+
+1. **Thứ hạng hiện tại phản ánh mức độ quét tham số nhiều hơn phản ánh chất lượng chiến lược.**
+   Tường và Quang là hai người duy nhất quét đủ 3 giá trị trước khi chốt, và cũng là hai người đứng
+   đầu. Ba người còn lại chốt tham số theo trực giác; riêng Sáng vô tình chọn **cấu hình tệ nhất
+   trong 6 cấu hình được thử** — `overlap=150` cho điểm THẤP HƠN `overlap=0` (3/10 vs 4/10), đi ngược
+   hoàn toàn kỳ vọng ban đầu rằng overlap lớn giúp giữ ngữ cảnh.
+2. **`FixedSizeChunker` không hề yếu như điểm số gợi ý.** Ở `400/120` nó đạt 7/10 — ngang Tường và
+   chỉ kém Quang 1 điểm. Kết luận "cắt cứng theo ký tự là chiến lược tệ nhất" mà nhóm suýt rút ra
+   là **sai**; vấn đề nằm ở tham số, không ở thuật toán.
+3. **Câu 5 thất bại ở cả 21 cấu hình.** Không một tổ hợp `chunk_size`/`overlap`/`max_sentences` nào
+   đưa được chunk gold lên top-3. Đây là bằng chứng mạnh nhất rằng câu 5 là **vấn đề cấu trúc**:
+   khi tài liệu dài 43.112 ký tự và hàng chục mục cùng chứa động từ "thu thập", chỉ việc **đưa tiêu
+   đề mục vào vector** mới phân biệt được — không có tham số nào thay thế được cơ chế đó.
+
+> **Vì sao nhóm KHÔNG cập nhật tham số vào bài nộp:** đây là tinh chỉnh trên chính bộ test 5 câu,
+> tức là overfitting. Với cỡ mẫu 5 câu, chênh lệch 1–2 điểm nằm trong khoảng nhiễu. Nhóm giữ nguyên
+> cấu hình mỗi người đã chốt và báo cáo dư địa này như một **phát hiện**, thay vì chỉnh số cho đẹp.
+> Nếu làm lại, quy trình đúng là tách bộ câu hỏi thành *tập tinh chỉnh* và *tập đánh giá* riêng biệt.
+
 **Chiến lược nào tốt nhất cho chủ đề này? Tại sao?**
 
 > **Không có chiến lược nào thắng tuyệt đối — và đó chính là kết luận.** Hai chiến lược đồng hạng
@@ -627,7 +660,11 @@ văn câu chứa đáp án, không cho phép suy diễn).
 > gom cả hai vào cùng một file có tiêu đề phân biệt rõ chủ thể, hoặc ghi rõ chủ thể ngay trong tiêu
 > đề mục, embedding sẽ tách bạch được.
 >
-> **4. Dọn rác điều hướng trước khi nạp.** `tiki-seller-warranty-faq.md` còn menu *"Chương trình
+> **4. Tách tập tinh chỉnh khỏi tập đánh giá.** Bài học lớn nhất từ bảng độ nhạy tham số ở Phần 2:
+> với chỉ 5 câu hỏi, việc chọn tham số dựa trên chính 5 câu đó là overfitting. Lần sau nhóm sẽ viết
+> 10–12 câu, dùng 5 câu để tinh chỉnh và giữ 5 câu còn lại chỉ để chấm cuối cùng.
+>
+> **5. Dọn rác điều hướng trước khi nạp.** `tiki-seller-warranty-faq.md` còn menu *"Chương trình
 > Freeship Xtra…"* và các file GHN còn *"Trang chủ"*. Chưa gây lỗi ở 5 câu này nhưng làm loãng store
 > và tạo chunk vô nghĩa.
 
