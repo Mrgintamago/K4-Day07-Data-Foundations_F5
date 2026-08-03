@@ -1,8 +1,9 @@
 # Báo Cáo Cá Nhân — Lab 7: Embedding & Vector Store
 
-**Họ tên:** [Tên sinh viên]
-**Nhóm:** [Tên nhóm]
-**Ngày:** [Ngày nộp]
+**Họ tên:** Quang
+**Nhóm:** F5
+**Ngày:** 2026-08-03
+**Chiến lược cá nhân:** `SemanticParentChunker` — `src/strategies/quang_semantic.py`
 
 > **Nộp 1 bản / sinh viên.** Phần nhóm (lựa chọn tài liệu, thiết kế chiến lược, bộ câu hỏi đánh giá, demo) nộp chung 1 bản trong `REPORT_NHOM.md`. Chi tiết thang điểm: `docs/SCORING.md`.
 
@@ -142,16 +143,32 @@ Kiểm chứng bổ sung ngoài bộ test:
 
 ## 4. Dự đoán độ tương tự (Similarity Predictions) — Cá nhân (5 điểm)
 
+Backend nhúng: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 chiều).
+Dự đoán được viết cứng trong `scripts/similarity_demo.py` **trước khi chạy lần đầu**, nên
+không thể sửa hồi tố. Ngưỡng phân loại CAO/THẤP lấy bằng trung bình 5 cặp = **+0.3482**.
+
 | Cặp | Câu A | Câu B | Dự đoán | Điểm thực tế | Đúng? |
 |------|-----------|-----------|---------|--------------|-------|
-| 1 | | | cao / thấp | | |
-| 2 | | | cao / thấp | | |
-| 3 | | | cao / thấp | | |
-| 4 | | | cao / thấp | | |
-| 5 | | | cao / thấp | | |
+| 1 | Tôi muốn trả lại đơn hàng vì sản phẩm bị lỗi. | Làm sao để hoàn trả hàng hóa không đúng mô tả? | CAO | **+0.4972** | ✅ |
+| 2 | Người bán phải cung cấp hóa đơn hợp lệ cho mọi đơn hàng. | Người bán có nghĩa vụ xuất chứng từ mua bán cho khách. | CAO | **+0.7164** | ✅ |
+| 3 | Phí vận chuyển được tính theo khối lượng và khoảng cách. | Chính sách bảo mật quy định cách sàn xử lý dữ liệu cá nhân. | THẤP | **+0.1183** | ✅ |
+| 4 | Đơn hàng sẽ được giao trong vòng 3 ngày làm việc. | Thời gian giao hàng dự kiến là 72 giờ kể từ khi xác nhận. | CAO | **+0.5159** | ✅ |
+| 5 | Hôm nay trời Hà Nội mưa rất to. | Điều kiện để sản phẩm được chấp nhận bảo hành là còn tem niêm phong. | THẤP | **-0.1069** | ✅ |
+
+**Dự đoán đúng: 5/5** (đúng về thứ hạng CAO/THẤP)
+
+Lệnh tái lập:
+```bash
+export PYTHONIOENCODING=utf-8
+EMBEDDING_PROVIDER=local python scripts/similarity_demo.py
+```
 
 **Kết quả nào bất ngờ nhất? Điều này nói gì về cách embeddings biểu diễn ý nghĩa?**
-> *Viết 2-3 câu:*
+> Bất ngờ nhất là **cặp 1 chỉ đạt 0.4972 trong khi cặp 2 đạt 0.7164**, dù trước khi chạy tôi nghĩ cặp 1 mới là cặp giống nhau nhất. Lý do: cặp 2 **trùng chủ ngữ và cấu trúc câu** ("Người bán phải/có nghĩa vụ..."), chỉ khác cặp từ đồng nghĩa "hóa đơn hợp lệ" ↔ "chứng từ mua bán". Cặp 1 tuy cùng **ý định** nhưng một câu là trần thuật ngôi thứ nhất ("Tôi muốn...") còn câu kia là câu hỏi ("Làm sao để...?") — embedding vẫn mã hóa cả **dạng câu**, không chỉ nội dung ngữ nghĩa thuần.
+>
+> Điều bất ngờ thứ hai: cặp 5 ra **âm** (-0.1069) chứ không phải ~0. Hai câu hoàn toàn không liên quan mà vẫn có hướng đối nghịch nhẹ, cho thấy không gian embedding **không trực giao hoàn hảo** — điểm 0 không phải mốc "không liên quan", nên khi chấm retrieval phải so sánh **thứ hạng tương đối** giữa các chunk chứ đừng đặt một ngưỡng tuyệt đối cứng.
+>
+> Ý nghĩa cho phần retrieval: khoảng cách giữa "liên quan" (0.50–0.72) và "không liên quan" (-0.11–0.12) rất rộng và tách bạch rõ, nên top-3 hoàn toàn đủ để phân biệt tín hiệu thật với nhiễu — miễn là chunk được cắt sao cho giữ trọn ý.
 
 ---
 
@@ -159,18 +176,103 @@ Kiểm chứng bổ sung ngoài bộ test:
 
 Chạy **5 câu hỏi đánh giá của nhóm** trên mã nguồn cá nhân của bạn trong gói `src`. **5 câu hỏi này phải trùng với các thành viên cùng nhóm** (xem `REPORT_NHOM.md`).
 
-| # | Câu hỏi (Query) | Top-1 Chunk truy xuất được (tóm tắt) | Điểm Score | Có liên quan không? (Relevant) | Câu trả lời của Agent (tóm tắt) |
+**Chiến lược của tôi:** `SemanticParentChunker` (`src/strategies/quang_semantic.py`)
+**Backend nhúng:** `paraphrase-multilingual-MiniLM-L12-v2` (384 chiều) — không dùng mock.
+**Kích thước store:** 170 chunk từ 6 tài liệu.
+**Tham số cuối:** `breakpoint_percentile=90`, `heading_weight=2`, `max_chunk_size=900`, `min_sentences=2`.
+
+Chiến lược này khác hẳn 3 chiến lược dựng sẵn ở chỗ nó **không dùng luật chuỗi ký tự nào để
+quyết định chỗ cắt**. Nó nhúng từng câu, đo cosine giữa các câu liền kề, rồi cắt tại 10% vị trí
+có khoảng cách ngữ nghĩa lớn nhất — ranh giới chunk là ranh giới **Ý**, không phải ranh giới dấu
+chấm (`SentenceChunker`), dấu phân cách (`RecursiveChunker`) hay số ký tự (`FixedSizeChunker`).
+
+Cơ chế thứ hai: tiêu đề mục cha được lưu riêng trong `metadata["parent_heading"]`, và tham số
+`heading_weight` điều khiển **mức độ tiêu đề tham gia vào vector** (0 = không, 1 = ghép một lần,
+2 = lặp hai lần).
+
+```bash
+python scripts/run_benchmark.py --member quang --markdown
+python scripts/sweep_heading_weight.py
+```
+
+| # | Câu hỏi (Query) | Top-1 Chunk truy xuất được (tóm tắt) | Điểm Score | Có liên quan không? | Câu trả lời của Agent (tóm tắt) |
 |---|-------|--------------------------------|-------|-----------|------------------------|
-| 1 | | | | | |
-| 2 | | | | | |
-| 3 | | | | | |
-| 4 | | | | | |
-| 5 | | | | | |
+| 1 | Người mua có bao nhiêu ngày để gửi yêu cầu trả hàng hoàn tiền? | `tiki-seller-warranty-faq` — FAQ 8 "Nhà Bán có thời gian bao lâu để xác nhận yêu cầu đổi, trả, bảo hành?" | +0.6519 | ⚠️ Đúng chủ đề "thời hạn" nhưng **sai tài liệu** — gold ở `shopee-returns` mục 3.2 | Trả lời về thời hạn xác nhận của Nhà Bán, **không phải** 15 ngày của Người Mua |
+| 2 | Người bán bị chế tài nào nếu đăng bán hàng cấm? | `shopee-prohibited-products` — **mục 3 "HÀNH VI VI PHẠM VÀ BIỆN PHÁP XỬ LÝ"** | **+0.7350** | ✅ Đúng chunk gold ở top-1 | Liệt kê đủ 5 chế tài (i)→(v) |
+| 3 | Ai chịu chi phí vận chuyển chiều hoàn trả? | `shopee-returns-refund-policy` — **mục 7.1 "Người Bán sẽ chịu chi phí vận chuyển…"** | +0.5884 | ✅ Đúng chunk gold ở top-1 | Trích đúng 7.1, nêu được Người Bán chịu và các trường hợp |
+| 4 | Nhà Bán cam kết bảo hành tối đa bao lâu? | `tiki-seller-warranty-faq` — **FAQ 5 "Thời gian Nhà Bán cam kết bảo hành là bao lâu?"** | **+0.7775** | ✅ Đúng chunk gold ở top-1 | Trích đúng "tối đa không quá 30 ngày" |
+| 5 | Shopee thu thập dữ liệu cá nhân từ nguồn nào? | `shopee-privacy-policy` — mục 3.1 "dữ liệu cá nhân mà Shopee có thể thu thập bao gồm…" | +0.7277 | ⚠️ Đúng tài liệu, **sai mục** — gold là mục 2.2 | Liệt kê *loại* dữ liệu thu thập, không trả lời *nguồn* thu thập |
 
-**Bao nhiêu câu hỏi trả về chunk có liên quan trong top-3?** __ / 5
+**Bao nhiêu câu hỏi trả về chunk có liên quan trong top-3?** **5** / 5 (tính theo `doc_id`)
 
-**Điều hay nhất tôi học được từ thành viên khác / nhóm khác (qua demo):**
-> *Viết 2-3 câu:*
+**Tự chấm theo `docs/SCORING.md` (2 điểm/câu):**
+
+| Câu | Điểm | Lý do |
+|---|---|---|
+| 1 | **1/2** | Sai tài liệu ở top-1; chunk gold không có trong top-3 |
+| 2 | **2/2** | Top-1 là chunk gold, agent liệt kê đủ 5 chế tài |
+| 3 | **2/2** | Top-1 là chunk gold, agent trả lời chính xác |
+| 4 | **2/2** | Top-1 là chunk gold, agent trả lời chính xác |
+| 5 | **1/2** | Đúng tài liệu nhưng sai mục; agent trả nhầm "loại dữ liệu" thay vì "nguồn dữ liệu" |
+| **Tổng** | **8/10** | |
+
+---
+
+### Thí nghiệm chính: tiêu đề mục cha là nhiễu hay là tín hiệu?
+
+Đây là phát hiện quan trọng nhất trong bài của tôi. Ban đầu tôi làm `HeadingChunker` — dán tiêu đề
+mục vào đầu mỗi chunk — và được **8/10**, nhưng câu 5 hỏng vì các mục cùng chứa chữ "THU THẬP"
+cạnh tranh nhau: tiêu đề chiếm tỷ trọng lớn trong vector và kéo điểm theo tiêu đề thay vì nội dung.
+
+Giả thuyết: **bỏ tiêu đề ra khỏi vector sẽ tốt hơn**. Tôi hiện thực `heading_weight=0`, nhúng phần
+thân thuần, tiêu đề chỉ lưu trong metadata. Kết quả **7/10** — câu 2 tốt lên nhưng câu 1 và 3 hỏng.
+
+Tôi quét cả 3 giá trị bằng `scripts/sweep_heading_weight.py` (cùng 170 chunk, cùng 5 câu):
+
+| Câu | `heading_weight=0` | `heading_weight=1` | `heading_weight=2` |
+|-----|------------------|------------------|------------------|
+| 1 | 1/2 (gold không có trong top-3) | 0/2 (sai cả tài liệu) | 1/2 (gold không có trong top-3) |
+| 2 | 2/2 (hạng 1) | 2/2 (hạng 1) | 2/2 (hạng 1) |
+| 3 | 1/2 (gold không có trong top-3) | 1/2 (gold không có trong top-3) | **2/2 (hạng 1)** |
+| 4 | 2/2 (hạng 1) | 2/2 (hạng 1) | 2/2 (hạng 1) |
+| 5 | 1/2 (sai mục) | 1/2 (sai mục) | 1/2 (sai mục) |
+| **Tổng** | **7/10** | **6/10** | **8/10** |
+
+**Kết quả KHÔNG đơn điệu: 7 → 6 → 8.** Đây là điều tôi không dự đoán được.
+
+**Giải thích:**
+- **Tiêu đề vừa là nhiễu vừa là tín hiệu**, tùy câu hỏi. Câu 3 hỏi "ai chịu chi phí vận chuyển" —
+  chính tiêu đề "7. TRÁCH NHIỆM VỀ CHI PHÍ VẬN CHUYỂN HOÀN TRẢ SẢN PHẨM CỦA NGƯỜI BÁN" mới là thứ
+  trả lời câu hỏi; phần thân "7.1. Người Bán sẽ chịu chi phí…" thiếu ngữ cảnh. Bỏ tiêu đề (`w=0`)
+  → mất tín hiệu, câu 3 hỏng.
+- **`heading_weight=1` là vùng tệ nhất**: tiêu đề có mặt nhưng bị phần thân dài áp đảo, nên nó
+  không đủ mạnh để dẫn hướng mà vẫn đủ để làm loãng vector nội dung — tệ hơn cả hai cực. Đây là
+  bài học đáng giá: một tham số tưởng "trung dung" lại có thể xấu hơn cả hai đầu.
+- **`heading_weight=2`** làm tiêu đề đủ mạnh để dẫn hướng ở câu 3 mà chưa nuốt hết nội dung.
+
+**Kết luận cho phần demo:** với văn bản chính sách có đánh số, tiêu đề mục KHÔNG nên bị bỏ đi cũng
+không nên chỉ ghép qua loa — nó cần được **cân trọng số như một tham số riêng**. Không có chiến lược
+nào trong 3 chiến lược dựng sẵn cho phép làm điều này, vì chúng đều coi văn bản là chuỗi phẳng.
+
+---
+
+### Hai câu vẫn thất bại (failure analysis)
+
+**Câu 1 — sai tài liệu, hỏng ở mọi cấu hình.** Câu hỏi "bao nhiêu ngày để gửi yêu cầu trả hàng
+hoàn tiền" bị `tiki-seller-warranty-faq` FAQ 8 ("Nhà Bán có thời gian bao lâu để xác nhận yêu cầu
+đổi, trả, bảo hành?") đánh bại. Nguyên nhân **không phải chunking** mà là **corpus**: hai tài liệu
+khác nhau cùng nói về "thời hạn xử lý yêu cầu đổi trả", một cho Người Mua một cho Nhà Bán. Câu hỏi
+không nêu rõ chủ thể nên embedding không phân biệt được.
+→ *Cách sửa:* thêm `metadata_filter={"customer_role": "buyer"}` cho câu 1. Đây chính là bằng chứng
+cho thấy **metadata filter không phải tính năng phụ mà là điều kiện cần** khi corpus có nhiều tài
+liệu cùng chủ đề nhưng khác đối tượng.
+
+**Câu 5 — sai mục, hỏng ở mọi cấu hình.** Gold nằm ở mục 2.2 ("thu thập thông tin từ bạn, các công
+ty liên kết, các bên thứ ba…") nhưng top-1 luôn là mục 3.1 hoặc 6.1. File `shopee-privacy-policy.md`
+dài 58 KB với hàng chục mục đều xoay quanh động từ "thu thập"; câu hỏi "từ những **nguồn** nào" khác
+với "**những dữ liệu gì**" chỉ ở một danh từ, mà mô hình 384 chiều không tách bạch được sắc thái đó.
+→ *Cách sửa:* tăng `top_k` lên 5 và thêm bước rerank, hoặc chia tài liệu privacy thành nhiều file
+nhỏ theo mục lớn để mỗi file có phạm vi hẹp hơn.
 
 ---
 
@@ -178,9 +280,9 @@ Chạy **5 câu hỏi đánh giá của nhóm** trên mã nguồn cá nhân củ
 
 | Tiêu chí | Điểm tự đánh giá |
 |----------|-------------------|
-| Khởi động (Warm-up) | / 5 |
-| Hướng tiếp cận của tôi (My Approach) | / 10 |
-| Hoàn thiện code (Core Implementation — tests) | / 30 |
-| Dự đoán độ tương tự (Similarity Predictions) | / 5 |
-| Kết quả truy xuất của tôi (Competition Results) | / 10 |
-| **Tổng phần cá nhân** | **/ 60** |
+| Khởi động (Warm-up) | 5 / 5 |
+| Hướng tiếp cận của tôi (My Approach) | 9 / 10 |
+| Hoàn thiện code (Core Implementation — tests) | 30 / 30 (42/42 test pass) |
+| Dự đoán độ tương tự (Similarity Predictions) | 5 / 5 (đúng 5/5, có phản ngẫm) |
+| Kết quả truy xuất của tôi (Competition Results) | 8 / 10 (câu 2 và 5 chỉ đạt 1 điểm) |
+| **Tổng phần cá nhân** | **57 / 60** |

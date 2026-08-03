@@ -14,7 +14,7 @@
 | `data/k4_ecommerce/sources.csv` | ✅ 6 dòng, khớp 1:1 với file | Không còn `example-template-replace-me` |
 | `scripts/urls.csv` | ✅ 6 URL nguồn | Đã kiểm tra `robots.txt` — tất cả ALLOW |
 | `scripts/similarity_demo.py` | ✅ Bài 3.3 (5 cặp câu + dự đoán) | Dự đoán viết cứng trong code |
-| `REPORT_CANHAN.md` Phần 1, 2, 3 | ✅ Đã điền (bản của Quang) | Mỗi người phải tự viết bản của mình |
+| `report/REPORT_Quang.md` | ✅ Đầy đủ 5 phần, tự chấm 57/60 | Mỗi người tự viết bản của mình |
 
 ### Bộ tài liệu chung (6 tài liệu — KHÔNG ai được sửa)
 
@@ -30,14 +30,48 @@
 Metadata schema mỗi file (trong YAML front matter): `doc_id`, `title`, `source_url`,
 `retrieved_at`, `document_version`, `customer_role`, `category`, `language`.
 
-### Thiết lập môi trường (làm 1 lần, ~5 phút)
+### Thiết lập môi trường (làm 1 lần, ~15 phút)
 
 ```bash
 git pull
-python -m venv .venv                      # nếu chưa có
+python -m venv .venv                              # nếu chưa có
 .venv/Scripts/python.exe -m pip install -r requirements.txt
-.venv/Scripts/python.exe -m pytest tests/ -q     # kỳ vọng: 42 passed
-export PYTHONIOENCODING=utf-8             # BẮT BUỘC trên Windows, nếu không sẽ lỗi UnicodeEncodeError
+.venv/Scripts/python.exe -m pip install -r requirements-local.txt   # embedder thật, ~2GB
+.venv/Scripts/python.exe -m pytest tests/ -q      # kỳ vọng: 42 passed
+```
+
+**Tạo file `.env`** (nằm trong `.gitignore`, mỗi người tự tạo — không push):
+
+```bash
+cp .env.example .env
+```
+
+rồi sửa nội dung thành:
+
+```ini
+EMBEDDING_PROVIDER=local
+LOCAL_EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+HF_HUB_DISABLE_SYMLINKS_WARNING=1
+LAB_DATA_DIR=data/k4_ecommerce
+```
+
+Có `.env` rồi thì **không cần** gõ `EMBEDDING_PROVIDER=local` trước mỗi lệnh nữa — `load_dotenv()`
+đã được gọi sẵn trong `main.py`, `scripts/run_benchmark.py`, `scripts/similarity_demo.py`.
+
+**Riêng `PYTHONIOENCODING` KHÔNG đặt được trong `.env`** — Python đọc biến này lúc khởi động
+interpreter, trước khi `load_dotenv()` chạy. Trên Windows phải đặt ở tầng hệ thống:
+
+```powershell
+[Environment]::SetEnvironmentVariable("PYTHONIOENCODING","utf-8","User")
+```
+
+Không đặt thì mọi lệnh in tiếng Việt sẽ lỗi `UnicodeEncodeError` (console mặc định là cp1252).
+
+Kiểm tra embedder thật đã chạy — kết quả **không được** là `mock embeddings fallback`:
+
+```bash
+.venv/Scripts/python.exe -c "from src import LocalEmbedder; e=LocalEmbedder(); print(e._backend_name, len(e('test')))"
+# sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 384
 ```
 
 ---
@@ -72,7 +106,7 @@ Tất cả chạy **cùng 6 tài liệu** và **cùng 5 câu hỏi** ở trên. 
 
 | Thành viên | MSSV | Chiến lược | File tự viết | Trạng thái |
 |---|---|---|---|---|
-| Quang | — | **`HeadingChunker`** — cắt theo điều/khoản + heading | `src/strategies/quang_heading.py` | ✅ xong |
+| Quang | — | **`SemanticParentChunker`** — cắt theo ngữ nghĩa (embedding) + trọng số tiêu đề cha | `src/strategies/quang_semantic.py` | ✅ xong — **8/10** |
 | Lê Quý Thành | 2A202601168 | **`RecursiveChunker`** (có sẵn), tinh chỉnh `chunk_size` | `src/strategies/thanh_recursive.py` | ⬜ tự làm |
 | Trần Quang Sáng | 2A202601446 | **`FixedSizeChunker`** (có sẵn), tinh chỉnh `overlap` | `src/strategies/sang_fixed.py` | ⬜ tự làm |
 | Cao Các Tường | 2A202601236 | **`SentenceChunker`** (có sẵn), tinh chỉnh số câu | `src/strategies/tuong_sentence.py` | ⬜ tự làm |
@@ -81,7 +115,7 @@ Tất cả chạy **cùng 6 tài liệu** và **cùng 5 câu hỏi** ở trên. 
 ### Quy ước cho file chiến lược
 
 Mỗi file chỉ cần một lớp có đúng một phương thức `chunk(text: str) -> list[str]`,
-kèm hàm `build_chunker()` trả về cấu hình đã chọn. Xem `quang_heading.py` làm mẫu.
+kèm hàm `build_chunker()` trả về cấu hình đã chọn. Xem `quang_semantic.py` làm mẫu.
 
 ```python
 # src/strategies/<ten>_<chien_luoc>.py
@@ -108,9 +142,17 @@ src/
   chunking.py store.py agent.py   ← CHUNG, 42/42 pass, KHÔNG ai sửa
   strategies/<ten>_<chien_luoc>.py ← mỗi người 1 file
 report/
-  REPORT_CANHAN.md                ← template gốc, copy ra bản của mình
-  REPORT_CANHAN_<Ten>.md          ← mỗi người 1 file riêng
+  REPORT_<Ten>.md                 ← mỗi người 1 file riêng (VD: REPORT_LeQuyThanh.md)
   REPORT_NHOM.md                  ← 1 bản chung
+scripts/
+  run_benchmark.py                ← dùng chung, chọn người bằng --member
+  sweep_heading_weight.py         ← quét tham số (mẫu cho các bạn viết sweep của mình)
+  similarity_demo.py              ← bài 3.3, mỗi người tự đổi 5 cặp câu của mình
+```
+
+Lấy template báo cáo cá nhân (file gốc đã bị xóa khỏi repo):
+```bash
+git show 82b2330:report/REPORT_CANHAN.md > report/REPORT_<Ten>.md
 ```
 
 > ⚠️ **Không** tạo thư mục tên riêng trong `src/`. `tests/test_solution.py` import thẳng
@@ -146,21 +188,31 @@ for name, st in ChunkingStrategyComparator().compare(d.content, chunk_size=500).
 
 ---
 
-### 👤 Quang — `HeadingChunker` (cắt theo điều/khoản)
+### 👤 Quang — `SemanticParentChunker` ✅ ĐÃ XONG (8/10)
 
-**Ý tưởng:** cả 6 tài liệu đều là văn bản pháp lý có đánh số sẵn (`1.`, `1.2.`, `I.`, `# Heading`).
-Cắt tại ranh giới mục và **dán tiêu đề mục vào đầu mỗi chunk** để chunk tự mang ngữ cảnh.
+**Ý tưởng:** không dùng luật chuỗi ký tự nào để quyết định chỗ cắt. Nhúng từng câu, đo cosine
+giữa các câu liền kề, cắt tại 10% vị trí có khoảng cách ngữ nghĩa lớn nhất → ranh giới chunk là
+ranh giới **Ý**. Cộng thêm tham số `heading_weight` điều khiển mức độ tiêu đề mục cha tham gia
+vào vector (0 = không, 1 = ghép một lần, 2 = lặp hai lần).
 
-**Vì sao chọn:** `K4_VARIANT.md` bắt buộc ≥1 thành viên chunk theo điều/khoản/heading/FAQ.
-Kỳ vọng thắng câu 1, 2, 3 vì gold answer nằm gọn trong đúng một mục đánh số.
+**Kết quả sweep (170 chunk, cùng 5 câu benchmark):**
 
-**Nhược điểm phải nêu trong báo cáo:** phụ thuộc chất lượng cấu trúc; tài liệu không có heading
-thì phải fallback về `RecursiveChunker`. Chunk có thể rất dài nếu một mục dài (cần cắt phụ).
+| `heading_weight` | 0 | 1 | 2 |
+|---|---|---|---|
+| Điểm | 7/10 | **6/10** | **8/10** |
 
-- [ ] Viết `src/custom_chunking.py` với regex bắt `^(\d+(\.\d+)*\.?|[IVX]+\.|#{1,3})\s`
-- [ ] Mục nào dài hơn `max_chunk_size` → cắt tiếp bằng `RecursiveChunker`, giữ tiêu đề ở đầu mỗi mảnh
-- [ ] Chạy 5 câu hỏi, ghi top-3
-- [ ] Điền `REPORT_CANHAN.md` Phần 5 + gửi kết quả cho nhóm
+Kết quả **không đơn điệu** (7 → 6 → 8): tiêu đề vừa là nhiễu vừa là tín hiệu. `w=1` tệ nhất vì
+tiêu đề có mặt nhưng bị phần thân áp đảo — không đủ mạnh để dẫn hướng mà vẫn làm loãng vector.
+Chi tiết trong `report/REPORT_Quang.md`.
+
+**Nhược điểm:** chi phí nhúng cao (phải nhúng từng câu); **bắt buộc** dùng embedder thật —
+chạy bằng mock thì ranh giới cắt hoàn toàn ngẫu nhiên.
+
+- [x] Viết `src/strategies/quang_semantic.py`
+- [x] Chạy `scripts/sweep_heading_weight.py`, chọn `heading_weight=2`
+- [x] Chạy 5 câu benchmark, ghi top-3
+- [x] Điền `report/REPORT_Quang.md` Phần 5
+- [ ] Gửi kết quả cho nhóm để tổng hợp bảng so sánh
 
 ---
 
@@ -186,7 +238,7 @@ store = build_knowledge_base("data/k4_ecommerce", embedding_fn=embedder,
 - [ ] Thử ít nhất **3 giá trị** `chunk_size`: 300 / 500 / 800 — ghi lại count + avg mỗi lần
 - [ ] Chọn 1 giá trị tốt nhất, giải thích **tại sao** (dựa trên kết quả 5 câu hỏi, không đoán)
 - [ ] Chạy 5 câu hỏi với cấu hình đã chọn, ghi top-3
-- [ ] Điền `REPORT_CANHAN.md` Phần 5 + gửi kết quả cho nhóm
+- [ ] Điền `report/REPORT_<Ten>.md` Phần 5 + gửi kết quả cho nhóm
 
 ---
 
@@ -211,7 +263,7 @@ store = build_knowledge_base("data/k4_ecommerce", embedding_fn=embedder,
 - [ ] Thử ít nhất **3 mức** `overlap`: 0 / 50 / 150 (giữ `chunk_size=500`)
 - [ ] **Điểm ăn tiền:** tìm 1 câu hỏi mà `overlap=0` fail nhưng `overlap=150` pass → chụp lại
 - [ ] Chạy 5 câu hỏi với cấu hình tốt nhất, ghi top-3
-- [ ] Điền `REPORT_CANHAN.md` Phần 5 + gửi kết quả cho nhóm
+- [ ] Điền `report/REPORT_<Ten>.md` Phần 5 + gửi kết quả cho nhóm
 
 ---
 
@@ -238,7 +290,7 @@ store = build_knowledge_base("data/k4_ecommerce", embedding_fn=embedder,
 - [ ] Thử **3 giá trị** `max_sentences_per_chunk`: 2 / 4 / 6 — ghi count, avg, **min và max**
 - [ ] **Điểm ăn tiền:** in ra chunk ngắn nhất và dài nhất, dán vào báo cáo làm bằng chứng
 - [ ] Chạy 5 câu hỏi với cấu hình tốt nhất, ghi top-3
-- [ ] Điền `REPORT_CANHAN.md` Phần 5 + gửi kết quả cho nhóm
+- [ ] Điền `report/REPORT_<Ten>.md` Phần 5 + gửi kết quả cho nhóm
 
 ---
 
@@ -258,7 +310,7 @@ văn bản chính sách thuần → phải fallback (dùng `RecursiveChunker` ch
 và phải giải thích rõ cơ chế fallback đó trong báo cáo.
 
 ```python
-# src/faq_chunking.py — gợi ý khung
+# src/strategies/han_faq.py — gợi ý khung
 import re
 from .chunking import RecursiveChunker
 
@@ -277,11 +329,11 @@ class FAQPairChunker:
         # ... cắt text theo các mốc positions, mỗi lát = 1 cặp Q&A
 ```
 
-- [ ] Viết `src/faq_chunking.py`
+- [ ] Viết `src/strategies/han_faq.py`
 - [ ] Kiểm tra: trên `tiki-seller-warranty-faq.md` phải ra **≥11 chunk** (file có 11 câu FAQ ở mục I)
 - [ ] Kiểm tra: trên `ghn-terms-of-service.md` phải tự động fallback (không có `?` đánh số)
 - [ ] Chạy 5 câu hỏi, ghi top-3 — **so sánh riêng câu 4** với 4 bạn còn lại
-- [ ] Điền `REPORT_CANHAN.md` Phần 5 + gửi kết quả cho nhóm
+- [ ] Điền `report/REPORT_<Ten>.md` Phần 5 + gửi kết quả cho nhóm
 
 ---
 
@@ -306,7 +358,7 @@ Kết quả in ra **không được** là `mock embeddings fallback`. Nếu torc
 
 ```bash
 export PYTHONIOENCODING=utf-8
-EMBEDDING_PROVIDER=local .venv/Scripts/python.exe scripts/run_benchmark.py
+.venv/Scripts/python.exe scripts/run_benchmark.py --member <ten> --markdown
 ```
 
 (Script này Quang viết chung, nhận tham số `--chunker` để mỗi người chọn chiến lược của mình.)
@@ -339,7 +391,7 @@ Failure case: câu số ... — lý do ...
 
 ## PHẦN 4 — AI VIẾT PHẦN NÀO TRONG BÁO CÁO
 
-### `REPORT_CANHAN.md` — **mỗi người nộp 1 bản riêng**
+### `report/REPORT_<Ten>.md` — **mỗi người nộp 1 bản riêng**
 
 | Phần | Điểm | Ai làm |
 |---|---|---|
@@ -369,7 +421,7 @@ Failure case: câu số ... — lý do ...
 - [ ] `src/` có đủ 15 TODO đã viết + file chiến lược riêng
 - [ ] `data/k4_ecommerce/` — 6 tài liệu, `sources.csv` khớp 1:1, không còn `example.com`
 - [ ] `report/REPORT_NHOM.md` — 1 bản, không còn ô trống
-- [ ] `report/REPORT_CANHAN.md` — 5 bản riêng, Phần 2 và 4 khác nhau giữa các thành viên
+- [ ] `report/REPORT_<Ten>.md` — 5 bản riêng, Phần 2 và 4 khác nhau giữa các thành viên
 - [ ] Slide demo: 1 slide chiến lược của mỗi người + 1 slide bảng so sánh + 1 slide failure case
 
 ---
@@ -377,7 +429,20 @@ Failure case: câu số ... — lý do ...
 ## Việc còn đang chờ
 
 1. **Nhóm duyệt 5 câu hỏi ở Phần 1** — duyệt xong thì khóa lại, không đổi nữa
-2. Quang viết `src/custom_chunking.py` (HeadingChunker) + `scripts/run_benchmark.py` dùng chung
-3. Cài `sentence-transformers` để có embedder thật (đang chạy)
+2. **4 bạn viết file chiến lược của mình** trong `src/strategies/` rồi chạy
+   `python scripts/run_benchmark.py --member <ten> --markdown`
+3. Gửi kết quả về cho Quang tổng hợp bảng so sánh liên thành viên (Phần 2 của `REPORT_NHOM.md`)
 4. Dọn rác điều hướng còn sót trong `tiki-seller-warranty-faq.md` (menu "Chương trình Freeship Xtra…")
-   và `ghn-*.md` ("Trang chủ")
+   và `ghn-*.md` ("Trang chủ") — hiện chưa ảnh hưởng kết quả nhưng nên làm trước khi nộp
+
+### Hai câu benchmark hiện chưa ai giải được (cơ hội ăn điểm)
+
+Chiến lược của Quang fail ở câu 1 và câu 5. Nếu chiến lược của bạn giải được một trong hai,
+đó là luận điểm mạnh nhất cho phần so sánh nhóm:
+
+- **Câu 1** — bị `tiki-seller-warranty-faq` FAQ 8 ("Nhà Bán có thời gian bao lâu để xác nhận
+  yêu cầu đổi, trả, bảo hành?") đánh bại. Hai tài liệu cùng nói về "thời hạn xử lý đổi trả",
+  một cho Người Mua một cho Nhà Bán. Gợi ý: thử `metadata_filter={"customer_role": "buyer"}`.
+- **Câu 5** — `shopee-privacy-policy.md` dài 58 KB, hàng chục mục đều chứa động từ "thu thập".
+  Câu hỏi "từ những **nguồn** nào" khác "**dữ liệu gì**" chỉ ở một danh từ. Gợi ý: tăng `top_k`
+  lên 5, hoặc chunk nhỏ hơn để mỗi chunk có phạm vi hẹp.
