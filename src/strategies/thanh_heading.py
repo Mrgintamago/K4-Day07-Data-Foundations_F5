@@ -1,14 +1,14 @@
 """
-Chiến lược của Thành — `ThanhRecursiveChunker`: bọc `RecursiveChunker` với cấu hình
+Chiến lược của Lê Quý Thành — `ThanhRecursiveChunker`: bọc `RecursiveChunker` với cấu hình
 được tinh chỉnh cho corpus pháp lý / chính sách thương mại điện tử.
 
 LÝ DO THIẾT KẾ
 --------------
 `RecursiveChunker` (đã có sẵn trong `src/chunking.py`) cắt đệ quy theo thứ tự ưu tiên
-các dấu phân cách:  ``["\\n\\n", "\\n", ". ", " ", ""]``.
+các dấu phân cách: ["\n\n", "\n", ". ", " ", ""].
 
 Ưu điểm:
-- Tự thích ứng với mọi loại tài liệu — không phụ thuộc vào cấu trúc heading.
+- Tự thích ứng với mọi loại tài liệu — thuần túy phân đoạn đệ quy, không phụ thuộc vào cấu trúc heading hay regex.
 - Mỗi chunk luôn ≤ `chunk_size` ký tự, giữ nguyên ranh giới câu/đoạn khi có thể.
 - Với `chunk_size=500` (mặc định) và corpus ~6 tài liệu, mỗi chunk vừa đủ chứa
   1–2 đoạn ngữ nghĩa → phù hợp cho embedding-based retrieval.
@@ -30,7 +30,7 @@ from ..chunking import RecursiveChunker
 
 
 class ThanhRecursiveChunker:
-    """Bọc `RecursiveChunker` với cấu hình tinh chỉnh cho corpus K4.
+    """Bọc `RecursiveChunker` thuần túy với cấu hình tinh chỉnh cho corpus K4.
 
     Interface:
         chunker.chunk(text: str) -> list[str]
@@ -51,7 +51,7 @@ class ThanhRecursiveChunker:
         )
 
     def chunk(self, text: str) -> list[str]:
-        """Chia `text` thành các chunk ≤ `chunk_size` ký tự."""
+        """Chia `text` thành các chunk ≤ `chunk_size` ký tự bằng RecursiveChunker."""
         if not text or not text.strip():
             return []
         return self._inner.chunk(text)
