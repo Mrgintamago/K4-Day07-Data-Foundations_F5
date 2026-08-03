@@ -57,8 +57,15 @@ from ..chunking import RecursiveChunker, compute_similarity
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 
 # Tiêu đề/điều khoản dùng làm ngữ cảnh cha: "# ...", "1.", "1.2.", "I."
+#
+# QUAN TRỌNG — `{0,110}` chứ không phải `.*`: trong văn bản chính sách, một ĐOẠN VĂN
+# cũng bắt đầu bằng số thứ tự ("3.2. Người Mua có thể gửi yêu cầu... trong vòng 15 ngày...").
+# Nếu regex khớp cả đoạn dài thì toàn bộ nội dung bị hiểu nhầm là tiêu đề và bị đẩy sang
+# metadata, phần thân còn lại rỗng -> NỘI DUNG BỊ MẤT KHỎI STORE.
+# Giới hạn độ dài buộc chỉ những dòng thật sự là tiêu đề mới được nhận.
+MAX_HEADING_LENGTH = 110
 HEADING_RE = re.compile(
-    r"^(?:#{1,6}\s+\S.*|\d+(?:\.\d+)*\.?\s+\S.*|[IVX]+\.\s+\S.*)$",
+    rf"^(?:#{{1,6}}\s+\S.{{0,{MAX_HEADING_LENGTH}}}|\d+(?:\.\d+)*\.?\s+\S.{{0,{MAX_HEADING_LENGTH}}}|[IVX]+\.\s+\S.{{0,{MAX_HEADING_LENGTH}}})$",
     re.MULTILINE,
 )
 

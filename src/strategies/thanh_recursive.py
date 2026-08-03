@@ -57,6 +57,30 @@ class ThanhRecursiveChunker:
         return self._inner.chunk(text)
 
 
-def build_chunker() -> ThanhRecursiveChunker:
+CANDIDATE_CHUNK_SIZES = [300, 500, 800]
+
+# Giá trị chốt sau khi chạy sweep() và so kết quả 5 câu benchmark.
+CHOSEN_CHUNK_SIZE = 500
+
+
+def build_chunker(chunk_size: int | None = None) -> ThanhRecursiveChunker:
     """Cấu hình Thành dùng để chạy benchmark."""
-    return ThanhRecursiveChunker(chunk_size=500)
+    return ThanhRecursiveChunker(
+        chunk_size=CHOSEN_CHUNK_SIZE if chunk_size is None else chunk_size
+    )
+
+
+def sweep(text: str) -> dict[int, dict]:
+    """Quét các giá trị `chunk_size` trên một tài liệu, trả thống kê để dán vào báo cáo."""
+    results: dict[int, dict] = {}
+    for size in CANDIDATE_CHUNK_SIZES:
+        chunks = ThanhRecursiveChunker(chunk_size=size).chunk(text)
+        lengths = [len(c) for c in chunks] or [0]
+        results[size] = {
+            "count": len(chunks),
+            "avg_length": round(sum(lengths) / len(lengths), 1),
+            "min_length": min(lengths),
+            "max_length": max(lengths),
+            "max_min_ratio": round(max(lengths) / max(min(lengths), 1), 1),
+        }
+    return results

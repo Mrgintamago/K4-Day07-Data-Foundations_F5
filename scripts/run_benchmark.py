@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import inspect
 import os
 import subprocess
 import sys
@@ -91,6 +92,17 @@ QUERIES: list[tuple[str, str, str, dict | None]] = [
 ]
 
 
+# Chuỗi nhận diện chunk gold cho từng câu — dùng để chấm "chunk gold có ở top-k không",
+# chặt hơn tiêu chí "đúng doc_id". Trích nguyên văn từ corpus (verify bằng grep).
+GOLD_MARKERS = [
+    "15 (mười lăm) ngày",
+    "(i) Sản phẩm bị xóa",
+    "Người Bán sẽ chịu chi phí vận chuyển",
+    "tối đa không quá 30 ngày",
+    "cơ quan đánh giá tín dụng",
+]
+
+
 def select_embedder():
     """Chọn backend nhúng theo EMBEDDING_PROVIDER (giống main.py)."""
     load_dotenv(override=False)
@@ -116,11 +128,12 @@ def build_store_for(member: str, module, embedder):
     """
     if hasattr(module, "build_store"):
         return module.build_store(DATA_DIR, embedding_fn=embedder)
-    chunker = (
-        module.build_chunker(embedder)
-        if module.build_chunker.__code__.co_argcount
-        else module.build_chunker()
-    )
+
+    # Chỉ truyền embedder cho chunker nào KHAI BÁO tham số `embedding_fn`
+    # (chiến lược cắt theo ngữ nghĩa cần nó). Đếm số tham số là không đủ:
+    # một chunker có tham số `chunk_size` cũng có argcount > 0.
+    params = inspect.signature(module.build_chunker).parameters
+    chunker = module.build_chunker(embedding_fn=embedder) if "embedding_fn" in params else module.build_chunker()
     return build_knowledge_base(DATA_DIR, embedding_fn=embedder, chunker=chunker)
 
 

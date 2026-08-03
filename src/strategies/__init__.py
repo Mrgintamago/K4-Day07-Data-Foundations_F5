@@ -11,12 +11,13 @@ kèm hàm `build_chunker()` trả về cấu hình đã chọn.
 Phân công (xem KE_HOACH_NHOM.md để biết lý do thiết kế và checklist từng người):
 
     quang_semantic.py   — SemanticParentChunker (Quang)                 ✅ đã có
-    thanh_recursive.py  — RecursiveChunker      (Lê Quý Thành)          ⬜ tự làm
+    thanh_recursive.py  — ThanhRecursiveChunker (Lê Quý Thành)          ✅ đã có
     sang_fixed.py       — FixedSizeChunker      (Trần Quang Sáng)       ⬜ tự làm
     tuong_sentence.py   — SentenceChunker       (Cao Các Tường)         ⬜ tự làm
     han_faq.py          — FAQPairChunker        (Lưu Nguyễn Ngọc Hân)   ⬜ tự làm
 """
 
 from .quang_semantic import SemanticParentChunker
+from .thanh_recursive import ThanhRecursiveChunker
 
-__all__ = ["SemanticParentChunker"]
+__all__ = ["SemanticParentChunker", "ThanhRecursiveChunker"]
