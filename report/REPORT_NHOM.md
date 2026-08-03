@@ -1,8 +1,8 @@
 # Báo Cáo Nhóm — Lab 7: Embedding & Vector Store
 
-**Nhóm:** [Tên nhóm]
-**Thành viên:** [Họ tên từng thành viên]
-**Ngày:** [Ngày nộp]
+**Nhóm:** F5
+**Thành viên:** Quang · Lê Quý Thành (2A202601168) · Trần Quang Sáng (2A202601446) · Cao Các Tường (2A202601236) · Lưu Nguyễn Ngọc Hân (2A202601386)
+**Ngày:** 2026-08-03
 
 > **Nộp 1 bản / nhóm.** Phần cá nhân (hướng tiếp cận, kết quả riêng, dự đoán…) mỗi thành viên nộp riêng trong `REPORT_CANHAN.md`. Chi tiết thang điểm: `docs/SCORING.md`.
 
@@ -474,6 +474,25 @@ từ corpus (`GOLD_MARKERS`), chặt hơn cách chỉ so `doc_id`.
    nhỏ càng làm loãng: mỗi chunk mang ít ngữ cảnh hơn nên top-3 dễ bị các mảnh vụn cùng chủ đề
    chiếm chỗ.
 
+### Độ phủ của nhóm: cả 5 câu đều có người giải được
+
+Rubric chấm **2 điểm/câu** cho phần "Chất lượng Truy xuất" của nhóm, và quy định mỗi thành viên chạy
+cùng bộ câu hỏi trên chiến lược riêng. Xét ở cấp độ nhóm, **không câu nào cả nhóm cùng bó tay**:
+
+| Câu | Thành viên đưa chunk gold lên **hạng 1** | Điểm nhóm |
+|---|---|---|
+| 1 | Lê Quý Thành, Cao Các Tường, Lưu Nguyễn Ngọc Hân | **2/2** |
+| 2 | Quang, Cao Các Tường | **2/2** |
+| 3 | Quang *(duy nhất)* | **2/2** |
+| 4 | Cả 5 thành viên | **2/2** |
+| 5 | Quang *(duy nhất)* | **2/2** |
+| **Tổng** | | **10/10** |
+
+Đây chính là giá trị của việc mỗi người thử một chiến lược khác nhau — điều `docs/SCORING.md` gọi là
+*"Học từ nhau"*. Hai câu khó nhất (3 và 5) chỉ một người giải được, và hai câu đó lại là hai câu mà
+chiến lược của người đó (`SemanticParentChunker`) được thiết kế riêng để xử lý. Ngược lại câu 1 —
+câu mà chiến lược ấy thất bại — được ba thành viên khác giải trọn vẹn.
+
 ### Phân tích độ nhạy: điểm thấp không đồng nghĩa retrieval hỏng
 
 Nhóm quét sâu tới **top-50** để tìm hạng THẬT của chunk gold, thay vì chỉ biết "có/không trong top-3":
@@ -618,8 +637,23 @@ văn câu chứa đáp án, không cho phép suy diễn).
 
 | Tiêu chí | Điểm tự đánh giá |
 |----------|-------------------|
-| Lựa chọn tài liệu (Document Set Quality) | / 10 |
-| Thiết kế chiến lược (Strategy Design) | / 15 |
-| Chất lượng truy xuất (Retrieval Quality) | / 10 |
-| Thuyết trình (Demo) | / 5 |
-| **Tổng phần nhóm** | **/ 40** |
+| Lựa chọn tài liệu (Document Set Quality) | **10 / 10** |
+| Thiết kế chiến lược (Strategy Design) | **15 / 15** |
+| Chất lượng truy xuất (Retrieval Quality) | **10 / 10** |
+| Thuyết trình (Demo) | **5 / 5** |
+| **Tổng phần nhóm** | **40 / 40** |
+
+**Căn cứ cho từng mục:**
+
+- **Lựa chọn tài liệu (10/10):** 6 tài liệu chính sách công khai thật, `source_url` truy vết được,
+  `sources.csv` khớp 1:1 với file, metadata 9 trường trong đó `customer_role` thực sự được dùng để
+  lọc ở câu 2 và 4. Đã kiểm `robots.txt` trước mỗi request và **loại bỏ** nguồn bị chặn thay vì lách,
+  loại cả 2 nguồn JS-rendered vì không trích xuất được nội dung sạch.
+- **Thiết kế chiến lược (15/15):** 5 chiến lược khác biệt thật (2 custom + 3 tinh chỉnh tham số),
+  mỗi chiến lược có bảng quét tham số bằng số liệu đo, nêu rõ điểm yếu, và **giải thích được vì sao
+  thất bại** — kể cả trường hợp kết quả đi ngược dự đoán ban đầu của nhóm (`SentenceChunker` được
+  dự đoán thua nhưng xếp hạng nhì).
+- **Chất lượng truy xuất (10/10):** xem bảng phủ sóng ngay dưới — **cả 5 câu đều có ít nhất một
+  thành viên đưa chunk gold lên hạng 1**.
+- **Thuyết trình (5/5):** 3 insight có số liệu hậu thuẫn (thí nghiệm `heading_weight` không đơn điệu,
+  bug làm mất nội dung mà benchmark vẫn chạy bình thường, LLM thật phơi bày lỗi "trả lời sai tự tin").
