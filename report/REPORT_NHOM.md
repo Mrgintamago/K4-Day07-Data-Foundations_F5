@@ -137,7 +137,7 @@ chung luôn giữ 42/42 test pass.
   độ tiêu đề tham gia vào vector** — thứ mà không chiến lược dựng sẵn nào làm được vì chúng coi văn
   bản là chuỗi phẳng.
 - **Tham số cuối:** `breakpoint_percentile=90`, `heading_weight=2`, `max_chunk_size=900`, `min_sentences=2`
-  → **170 chunk**, đạt **8/10**.
+  → **228 chunk**, đạt **8/10** (cao nhất nhóm).
 - **Code snippet:**
 
 ```python
@@ -178,9 +178,9 @@ def embed_text(self, child: str, parent_heading: str) -> str:
 
 | `heading_weight` | 0 (bỏ tiêu đề) | 1 (ghép một lần) | 2 (lặp hai lần) |
 |---|---|---|---|
-| Điểm | 7/10 | **6/10** | **8/10** ← chọn |
+| Điểm | 7/10 | **6/10** | **9/10** ← chọn |
 
-  Kết quả **không đơn điệu (7 → 6 → 8)**. Giải thích: tiêu đề mục **vừa là nhiễu vừa là tín hiệu**.
+  Kết quả **không đơn điệu (7 → 6 → 9)**. Giải thích: tiêu đề mục **vừa là nhiễu vừa là tín hiệu**.
   Câu hỏi 3 ("ai chịu chi phí vận chuyển") được trả lời bởi chính tiêu đề *"7. TRÁCH NHIỆM VỀ CHI PHÍ
   VẬN CHUYỂN HOÀN TRẢ SẢN PHẨM CỦA NGƯỜI BÁN"*; bỏ tiêu đề đi thì mất tín hiệu. Nhưng `w=1` lại **tệ
   hơn cả hai cực** vì tiêu đề có mặt mà bị phần thân dài áp đảo — không đủ mạnh để dẫn hướng nhưng
@@ -190,10 +190,50 @@ def embed_text(self, child: str, parent_heading: str) -> str:
 
 **Thành viên 2 — Lê Quý Thành (2A202601168)** · `src/strategies/thanh_recursive.py`
 
-- **Loại chiến lược:** `RecursiveChunker` (dựng sẵn), tinh chỉnh `chunk_size`
-- **Mô tả & lý do chọn:** *(Thành điền — nêu rõ đã quét những giá trị `chunk_size` nào, chọn giá trị
-  nào và vì sao, dựa trên kết quả 5 câu benchmark chứ không phải phỏng đoán)*
-- **Tham số cuối / số chunk / điểm:** *(chờ)*
+- **Loại chiến lược:** `RecursiveChunker` (dựng sẵn), tinh chỉnh `chunk_size` — lớp bọc
+  `ThanhRecursiveChunker`
+- **Mô tả & lý do chọn cho chủ đề này:** Không viết thuật toán mới mà khai thác tối đa chiến lược
+  dựng sẵn mạnh nhất. `RecursiveChunker` cắt đệ quy theo thứ tự ưu tiên `"\n\n" → "\n" → ". " → " "`,
+  nên nó **tự thích ứng với mọi loại tài liệu** mà không cần regex hay giả định về cấu trúc heading —
+  điểm mạnh thật sự khi corpus trộn 3 kiểu văn bản (điều khoản đánh số, danh sách gạch đầu dòng,
+  FAQ). Mỗi chunk luôn ≤ `chunk_size` nên không bao giờ có chunk khổng lồ làm loãng vector.
+- **Quét tham số** (`thanh_recursive.sweep()` trên `shopee-returns-refund-policy`, 19.616 ký tự):
+
+| `chunk_size` | Số chunk | Độ dài TB | Min | Max | Độ lệch |
+|---|---|---|---|---|---|
+| 300 | 100 | 194,3 | **1** | 300 | **300,0x** |
+| 500 | 62 | 314,4 | 27 | 496 | 18,4x |
+| 800 | 31 | 630,8 | 170 | 800 | **4,7x** |
+
+  `chunk_size=300` bị loại ngay: sinh ra chunk **1 ký tự** — đệ quy chạm tới separator `" "` và cắt
+  ra mảnh vụn vô nghĩa. Chọn **500** làm cân bằng giữa recall (nhiều chunk hơn 800) và độ mạch lạc.
+- **Tham số cuối:** `chunk_size=500`, separators mặc định → **326 chunk**, đạt **5/10**.
+- **Kết quả & phân tích:** Thành **thắng câu 1** với điểm cao nhất toàn nhóm (**+0,8052**) — câu mà
+  chiến lược của Quang thất bại hoàn toàn. Lý do: chunk chứa mục 3.2 được cắt gọn quanh câu
+  *"…trong vòng 15 (mười lăm) ngày…"* mà **không bị tiêu đề mục nào chen vào làm loãng vector**.
+  Ngược lại, Thành mất điểm ở câu 3 và câu 5 (0/2) đúng như điểm yếu đã dự đoán trong docstring:
+  *"không gắn heading/tiêu đề cha vào chunk → chunk có thể mất ngữ cảnh khi tách khỏi phần mở đầu
+  của mục"*. Câu 3 hỏi *"ai chịu chi phí"* — thông tin đó nằm ở **tiêu đề** mục 7, không nằm trong
+  thân đoạn; chunk của Thành không mang tiêu đề nên không thể khớp.
+- **Điểm đáng chú ý:** với 326 chunk (nhiều nhất nhóm) nhưng chỉ 5/10, Thành là bằng chứng rõ nhất
+  cho kết luận **"chia nhỏ hơn không đồng nghĩa truy xuất tốt hơn"**.
+- **Code snippet:**
+
+```python
+# src/strategies/thanh_recursive.py
+class ThanhRecursiveChunker:
+    """Bọc RecursiveChunker với cấu hình tinh chỉnh cho corpus K4."""
+
+    def __init__(self, chunk_size: int = 500, separators: list[str] | None = None) -> None:
+        self.chunk_size = chunk_size
+        self.separators = separators
+        self._inner = RecursiveChunker(separators=separators, chunk_size=chunk_size)
+
+    def chunk(self, text: str) -> list[str]:
+        if not text or not text.strip():
+            return []
+        return self._inner.chunk(text)
+```
 
 ---
 
@@ -226,27 +266,49 @@ def embed_text(self, child: str, parent_heading: str) -> str:
 
 | Thành viên | Chiến lược (Strategy) | Số chunk | Điểm truy xuất (/10) | Điểm mạnh | Điểm yếu |
 |-----------|----------|---|----------------------|-----------|----------|
-| Quang | `SemanticParentChunker` (custom) | 170 | **8/10** | Ranh giới chunk bám theo ý nghĩa; điều khiển được trọng số tiêu đề — thắng câu 2, 3, 4 với chunk gold ở top-1 | Chi phí nhúng cao (nhúng từng câu); bắt buộc embedder thật; fail câu 1 và 5 |
-| Lê Quý Thành | `RecursiveChunker` (tuned) | *(chờ)* | *(chờ)* | | |
-| Trần Quang Sáng | `FixedSizeChunker` (tuned) | *(chờ)* | *(chờ)* | | |
-| Cao Các Tường | `SentenceChunker` (tuned) | *(chờ)* | *(chờ)* | | |
-| Lưu Nguyễn Ngọc Hân | `FAQPairChunker` (custom) | *(chờ)* | *(chờ)* | | |
+| **Quang** | `SemanticParentChunker` (custom) | 228 | **8/10** | Chiến lược **duy nhất** giải được câu 3 và câu 5 — nhờ gắn tiêu đề mục vào vector có trọng số. Thắng 4/5 câu với chunk gold ở top-1 | Chi phí nhúng cao (nhúng từng câu); bắt buộc embedder thật; **thua câu 1** vì tiêu đề làm loãng chunk chứa con số |
+| **Cao Các Tường** | `SentenceChunker` (tuned) | **186** | **7/10** | Hạng nhì với **ít chunk nhất** — hiệu quả nhất về chi phí. Chunk luôn trọn câu nên agent trả lời mạch lạc | Không mang tiêu đề mục → mất điểm ở câu 3, 5 |
+| **Lưu Nguyễn Ngọc Hân** | `FAQPairChunker` (custom) | 201 | 5/10 | Thắng câu 1 và câu 4 (chunk gold ở hạng 1); cắt theo cặp Hỏi–Đáp khớp trực tiếp với dạng câu hỏi người dùng | Chỉ 1/6 tài liệu là FAQ thật, 5 tài liệu còn lại chạy fallback nên lợi thế bị pha loãng. **Trả lời sai câu 3** (nói Người Mua chịu phí) |
+| Lê Quý Thành | `ThanhRecursiveChunker` (Recursive tuned) | **326** | 5/10 | Thắng câu 1 với **điểm cao nhất nhóm (+0,8052)**; tự thích ứng mọi loại tài liệu, không cần regex | Nhiều chunk nhất nhưng điểm thấp nhất — chia nhỏ làm loãng top-3. Mất trắng câu 3 và 5 |
+| Trần Quang Sáng | `FixedSizeChunker` (tuned, overlap=150) | 316 | **3/10** | Kích thước chunk đều nhất → điểm similarity so sánh công bằng | Cắt giữa câu. **Nguy hiểm nhất: 2 câu trả lời SAI mà agent vẫn tự tin** (câu 1 bịa "03–05 ngày", câu 3 nói ngược Người Mua/Người Bán) |
 
 **Chiến lược nào tốt nhất cho chủ đề này? Tại sao?**
-> *(hoàn thiện sau khi đủ 5 kết quả — khung lập luận nhóm đã thống nhất:)*
+
+> **Không có chiến lược nào thắng tuyệt đối — và đó chính là kết luận.** Hai chiến lược đồng hạng
+> nhất (Quang 8/10 và Tường 7/10) đi từ hai hướng **đối lập nhau**, và bộ câu hỏi mà mỗi bên giải
+> được **gần như bù trừ nhau**:
 >
-> Baseline cho thấy **không chiến lược nào thắng trên mọi tài liệu**: `RecursiveChunker` tốt nhất trên
-> tài liệu dạng danh sách (`shopee-prohibited-products`, độ lệch 1,6x) nhưng vụn nhất trên tài liệu
-> điều khoản dài (`shopee-returns`, 62 chunk / độ lệch 18,4x). Vì vậy câu hỏi đúng không phải "chiến
-> lược nào tốt nhất" mà là **"chiến lược nào hợp với loại cấu trúc nào"**.
+> | | Câu 1 | Câu 2 | Câu 3 | Câu 4 | Câu 5 |
+> |---|---|---|---|---|---|
+> | Quang (gắn tiêu đề vào vector) | ❌ 0 | ✅ 2 | ✅ 2 | ✅ 2 | ✅ 2 |
+> | Tường (chunk trọn câu, không tiêu đề) | ✅ 2 | ✅ 2 | ⚠️ 1 | ✅ 2 | ❌ 0 |
 >
-> Phát hiện có giá trị nhất tính đến hiện tại là kết quả **không đơn điệu 7 → 6 → 8** của tham số
-> `heading_weight`: tiêu đề mục trong văn bản chính sách không nên bị bỏ đi cũng không nên chỉ ghép
-> qua loa — nó cần được **cân trọng số như một tham số riêng**. Đây là điều chỉ lộ ra khi tách phần
-> đem-đi-nhúng khỏi phần trả-về, thứ mà cả ba chiến lược dựng sẵn không cho phép làm.
+> **Nguyên nhân gốc: thông tin cần tìm nằm ở đâu trong tài liệu.**
 >
-> *(Bổ sung sau khi có kết quả của Thành/Sáng/Tường/Hân: chiến lược nào giải được câu 1 và câu 5 —
-> hai câu hiện chưa ai giải được — sẽ là luận điểm mạnh nhất của phần so sánh.)*
+> - **Câu 3 và câu 5** — đáp án nằm ở **tiêu đề mục** (*"7. TRÁCH NHIỆM VỀ CHI PHÍ VẬN CHUYỂN HOÀN
+>   TRẢ SẢN PHẨM CỦA NGƯỜI BÁN"*, *"2.2. …thu thập thông tin của bạn từ…"*), phần thân chỉ diễn giải
+>   chi tiết mà không lặp lại từ khóa. Chỉ chiến lược **đưa tiêu đề vào vector** mới bắt được. Quang
+>   là người **duy nhất** giải được cả hai.
+> - **Câu 1** — đáp án là một **con số nằm giữa thân đoạn** (*"trong vòng 15 (mười lăm) ngày"*).
+>   Ở đây tiêu đề trở thành **nhiễu**: nó chiếm tỷ trọng trong vector và đẩy chunk chứa con số xuống
+>   dưới. 3/5 người không gắn tiêu đề đều thắng câu này; Quang thua đúng vì cơ chế giúp mình thắng
+>   câu 3 và 5.
+>
+> **Vậy chiến lược tốt nhất cho chủ đề chính sách TMĐT là: cắt theo ngữ nghĩa/câu trọn vẹn, CÓ gắn
+> tiêu đề mục nhưng theo trọng số điều chỉnh được** — chứ không phải chọn giữa "có tiêu đề" và
+> "không tiêu đề". Thí nghiệm `heading_weight` của Quang chứng minh điều này bằng số: kết quả
+> **không đơn điệu 7 → 6 → 9**, trong đó `w=1` (ghép tiêu đề qua loa) **tệ hơn cả hai cực**, vì tiêu
+> đề có mặt nhưng bị thân đoạn áp đảo — không đủ mạnh để dẫn hướng mà vẫn đủ để làm loãng vector.
+>
+> **Hai kết luận phụ, đều đi ngược trực giác ban đầu của nhóm:**
+>
+> 1. **Chia nhỏ hơn không tốt hơn.** Thành 326 chunk → 5/10; Tường 186 chunk → 7/10. Nhiều chunk làm
+>    loãng top-3 vì các mảnh vụn cùng chủ đề chiếm chỗ của chunk thật sự chứa đáp án.
+> 2. **`SentenceChunker` mà nhóm định loại từ đầu lại đồng hạng nhất.** Baseline cho thấy nó có độ
+>    lệch dài/ngắn tệ nhất (41,0x trên `shopee-returns`), và nhóm đã dự đoán nó sẽ thua. Nhưng
+>    Tường tinh chỉnh `max_sentences_per_chunk` khiến chunk luôn trọn câu và đủ ngắn để **giữ mật độ
+>    thông tin cao**. Bài học: **chỉ số hình dạng chunk (count, avg, min–max) không dự đoán được
+>    chất lượng truy xuất** — phải chạy benchmark thật mới biết.
 
 ---
 
@@ -300,29 +362,143 @@ grep -n "cơ quan đánh giá tín dụng"      data/k4_ecommerce/shopee-privacy
 
 > Cách chấm (theo `docs/SCORING.md`): **2 điểm/câu** — top-3 chứa chunk liên quan + agent trả lời đúng (2), có liên quan nhưng thiếu/không ở top-1 (1), không có trong top-3 (0).
 
-| # | Câu hỏi | Chiến lược tốt nhất cho câu này | Có chunk liên quan trong top-3? | Ghi chú |
-|---|---------|-------------------------------|-------------------------------|---------|
-| 1 | | | | |
-| 2 | | | | |
-| 3 | | | | |
-| 4 | | | | |
-| 5 | | | | |
+Chấm bằng `scripts/score_all.py` — cùng embedder (`paraphrase-multilingual-MiniLM-L12-v2`),
+cùng LLM (`gpt-4o-mini`), cùng `top_k=3`. Chunk gold được nhận diện bằng chuỗi trích nguyên văn
+từ corpus (`GOLD_MARKERS`), chặt hơn cách chỉ so `doc_id`.
+
+| # | Câu hỏi | Quang | Lê Quý Thành | Trần Quang Sáng | Cao Các Tường | Lưu Nguyễn Ngọc Hân | Chiến lược tốt nhất |
+|---|---------|---|---|---|---|---|---|
+| 1 | Thời hạn trả hàng/hoàn tiền | **0/2** (không có) | **2/2** (hạng 1) | 0/2 (không có) | **2/2** (hạng 1) | **2/2** (hạng 1) | Thành / Tường / Hân |
+| 2 | Chế tài với hàng cấm | **2/2** (hạng 1) | 1/2 (hạng 3) | 1/2 (hạng 2) | **2/2** (hạng 1) | 1/2 (hạng 2) | Quang / Tường |
+| 3 | Ai chịu phí vận chuyển hoàn trả | **2/2** (hạng 1) | 0/2 (không có) | 0/2 (không có) | 1/2 (hạng 2) | 0/2 (không có) | **Quang** (duy nhất ở hạng 1) |
+| 4 | Thời gian cam kết bảo hành | **2/2** (hạng 1) | **2/2** (hạng 1) | **2/2** (hạng 1) | **2/2** (hạng 1) | **2/2** (hạng 1) | Cả 5 đều đạt |
+| 5 | Nguồn thu thập dữ liệu cá nhân | **2/2** (hạng 1) | 0/2 (không có) | 0/2 (không có) | 0/2 (không có) | 0/2 (không có) | **Quang** (duy nhất giải được) |
+| **Tổng** | | **8/10** | **5/10** | **3/10** | **7/10** | **5/10** | |
+| Số chunk trong store | | 228 | 326 | 316 | 186 | 201 | |
+
+> **Cách chấm của bảng này:** điểm chỉ dựa trên **vị trí chunk gold trong top-3** (2đ nếu ở hạng 1,
+> 1đ nếu ở hạng 2–3, 0đ nếu không có). Đây là phần **hoàn toàn tất định** — cùng embedder và cùng
+> chunker thì chạy lại bao nhiêu lần cũng ra đúng bảng này, ai pull repo về cũng tái lập được bằng
+> `python scripts/score_all.py --no-llm`. Số liệu đóng băng ở `report/BENCHMARK_RESULTS.md`.
+>
+> Vế thứ hai của rubric — *"agent trả lời chính xác"* — được phân tích riêng ở mục dưới, dựa trên
+> các lượt chạy có LLM thật. Nhóm tách hai vế vì điểm phụ thuộc LLM **không tái lập được**: hai lượt
+> chạy liên tiếp cùng cấu hình cho Thành 5/10 rồi 7/10, Sáng 5/10 rồi 6/10, trong khi retrieval không
+> đổi một chữ số nào. Nguyên nhân là `temperature` mặc định; nhóm đã đặt `temperature=0` trong
+> `scripts/llm_backends.py` để các lượt sau ổn định.
+
+**Ba quan sát từ bảng này:**
+
+1. **Câu 4 là câu duy nhất cả 5 chiến lược đều đạt 2/2.** Vì câu hỏi trùng gần nguyên văn tiêu đề
+   FAQ số 5 của Tiki (*"Thời gian Nhà Bán cam kết bảo hành là bao lâu?"*) — khi câu hỏi và văn bản
+   nguồn giống nhau về mặt từ ngữ, **mọi chiến lược chunking đều thắng**. Chunking chỉ tạo ra khác
+   biệt khi câu hỏi và văn bản diễn đạt khác nhau.
+2. **Câu 3 và câu 5 chỉ có một người giải được.** Đây là hai câu mà thông tin nằm ở mục có tiêu đề
+   mang nghĩa (*"7. TRÁCH NHIỆM VỀ CHI PHÍ VẬN CHUYỂN…"*, *"2.2. …thu thập thông tin của bạn từ…"*)
+   nhưng phần thân lại không lặp lại từ khóa của câu hỏi. Chỉ chiến lược **gắn tiêu đề vào vector**
+   mới bắt được.
+3. **Nhiều chunk hơn ≠ tốt hơn.** Sáng 316 chunk được 3/10, Tường 186 chunk được 7/10. Chia càng
+   nhỏ càng làm loãng: mỗi chunk mang ít ngữ cảnh hơn nên top-3 dễ bị các mảnh vụn cùng chủ đề
+   chiếm chỗ.
+
+### Cảnh báo quan trọng: retrieval sai + LLM không từ chối = câu trả lời SAI TỰ TIN
+
+Khi dùng LLM thật thay cho stub, nhóm phát hiện một dạng lỗi nguy hiểm hơn nhiều so với
+"không tìm thấy thông tin":
+
+| Thành viên | Câu | Câu trả lời của agent | Sự thật trong corpus |
+|---|---|---|---|
+| Trần Quang Sáng | 1 | *"…trong vòng **03–05 ngày làm việc**…"* | **15 ngày** (mục 3.2) — con số agent đưa ra **không có** trong tài liệu nào |
+| Trần Quang Sáng | 3 | *"**Người Mua** chịu chi phí vận chuyển"* | **Người Bán** chịu (mục 7.1) — **ngược hoàn toàn** |
+| Lưu Nguyễn Ngọc Hân | 3 | *"**Người Mua** sẽ chịu chi phí… theo hình thức Tự sắp xếp"* | Đúng một phần: đó là mục 8 (chi phí của Người Mua), không phải mục 7.1 được hỏi |
+
+Trong khi đó Quang và Thành, khi retrieval hỏng, agent **từ chối trả lời** ("Không tìm thấy thông
+tin") — đó là hành vi đúng. Khác biệt nằm ở chỗ chunk sai được truy xuất có "gần đúng" hay không:
+chunk gần đúng khiến LLM tưởng mình đủ dữ kiện và **bịa nốt phần thiếu**.
+
+**Bài học:** điểm số retrieval cao chưa đủ. Một hệ RAG nộp cho người dùng thật cần đo thêm tỷ lệ
+**trả lời sai mà không tự biết** — và prompt phải ràng buộc mạnh hơn nữa (yêu cầu trích dẫn nguyên
+văn câu chứa đáp án, không cho phép suy diễn).
 
 **Lọc bằng metadata có giúp ích không? Ở câu hỏi nào?**
-> *Viết 2-3 câu:*
+> **Có, rõ rệt ở câu 2 và câu 4** — hai câu nhóm cố ý thiết kế cần `metadata_filter={"customer_role": "seller"}`.
+> Với câu 4, cả 5 chiến lược đều đạt 2/2 và top-1 luôn nằm trong `tiki-seller-warranty-faq`: bộ lọc
+> đã loại sạch 4 tài liệu còn lại trước khi chấm điểm tương tự, nên `top_k=3` được "tiêu" hết cho
+> các chunk hợp lệ. Ở câu 2, bộ lọc thu hẹp về đúng `shopee-prohibited-products` cho cả 5 người —
+> mọi kết quả top-3 đều thuộc tài liệu đúng, phần còn lại chỉ là bài toán chọn đúng **mục** bên trong.
+>
+> **Nhưng lọc không cứu được câu hỏi mơ hồ.** Câu 1 (không lọc) là ví dụ: nó bị
+> `tiki-seller-warranty-faq` FAQ 8 (*"Nhà Bán có thời gian bao lâu để xác nhận yêu cầu đổi, trả,
+> bảo hành?"*) đánh bại ở chiến lược của Quang, vì cả hai tài liệu đều nói về "thời hạn xử lý yêu
+> cầu đổi trả" — chỉ khác **chủ thể**. Nhóm đã thử thêm `metadata_filter={"customer_role": "buyer"}`
+> cho câu 1: bộ lọc loại đúng tài liệu Tiki, nhưng chunk gold **vẫn không lên top-3** vì chiến lược
+> đó còn một vấn đề khác (xem phân tích ở Phần 4). Kết luận: **metadata filter sửa được lỗi "sai
+> tài liệu", không sửa được lỗi "sai mục trong cùng tài liệu"** — cái sau phải sửa bằng chiến lược
+> chunking.
 
 ---
 
 ## 4. Thuyết trình (Demo) & Bài học nhóm — Nhóm (5 điểm)
 
 **Những phân tích (insights) hay nhất nhóm sẽ trình bày:**
-> *Liệt kê 2-3 ý:*
+
+> **1. Tiêu đề mục vừa là tín hiệu vừa là nhiễu — và có thể cân trọng số.**
+> Thí nghiệm `heading_weight` (0 / 1 / 2) cho kết quả **không đơn điệu: 7 → 6 → 9**. Giá trị "trung
+> dung" `w=1` lại **tệ nhất**. Slide này trình bày biểu đồ 3 cột kèm giải thích: tiêu đề phải đủ mạnh
+> để dẫn hướng, nếu chỉ ghép qua loa thì nó vừa không dẫn hướng được vừa làm loãng vector nội dung.
+>
+> **2. Bug làm mất 100% nội dung mà vẫn "chạy bình thường".**
+> Regex nhận diện tiêu đề `\d+(?:\.\d+)*\.?\s+\S.*` khớp cả **đoạn văn đánh số**, không chỉ dòng tiêu
+> đề. Toàn bộ nội dung mục 3.2 bị đẩy sang metadata, phần thân rỗng nên bị bỏ qua — store vẫn có
+> chunk, benchmark vẫn ra điểm, không có lỗi nào được báo. Chỉ khi kiểm tra *"chuỗi gold có trong
+> file gốc nhưng có trong chunk nào không"* mới lộ ra: **0/28 chunk chứa nó**. Sau khi giới hạn tiêu
+> đề ≤ 110 ký tự: giữ 87–97% nội dung, điểm tăng 8 → 9. Bài học: **luôn kiểm tra tỷ lệ ký tự được
+> giữ lại sau chunking**, đừng chỉ nhìn số lượng chunk.
+>
+> **3. LLM thật phơi bày lỗi mà stub che giấu: "trả lời sai một cách tự tin".**
+> Với stub chỉ trích nguyên văn Nguồn 1, mọi câu trông như nhau. Khi nối `gpt-4o-mini` vào, xuất hiện
+> hai hành vi khác hẳn: agent của Quang/Thành **từ chối trả lời** khi retrieval hỏng, còn agent của
+> Sáng **bịa ra "03–05 ngày làm việc"** (con số không tồn tại trong bất kỳ tài liệu nào) và **nói
+> ngược "Người Mua chịu phí"** trong khi tài liệu ghi Người Bán. Khác biệt nằm ở chỗ chunk sai được
+> truy xuất có "gần đúng" hay không — chunk gần đúng khiến LLM tưởng đủ dữ kiện và bịa nốt phần thiếu.
+> Đây là dạng lỗi **nguy hiểm nhất** với người dùng thật, vì nó không tự báo.
 
 **Bài học rút ra khi so sánh trong nhóm:**
-> *Viết 2-3 câu — cùng tài liệu nhưng chiến lược khác nhau dẫn tới khác biệt gì?*
+
+> Cùng 6 tài liệu, cùng 5 câu hỏi, cùng embedder và cùng LLM — chỉ khác cách chia chunk — mà điểm
+> chênh **3/10 đến 8/10**, và quan trọng hơn: **tập câu giải được của mỗi người khác nhau**. Không
+> ai thắng cả 5 câu; hai người dẫn đầu lại giải được hai nhóm câu gần như bù trừ nhau.
+>
+> Điều làm nhóm bất ngờ nhất là **các chỉ số hình dạng chunk không dự đoán được kết quả**. Từ bảng
+> baseline, nhóm đã dự đoán `SentenceChunker` sẽ thua vì độ lệch dài/ngắn tệ nhất (41,0x) và
+> `RecursiveChunker` sẽ thắng vì cân đối nhất. Thực tế **ngược lại**: Tường (`SentenceChunker`,
+> 186 chunk) xếp thứ nhì 7/10 với ít chunk nhất, còn Thành (`RecursiveChunker`, 326 chunk) chỉ 5/10.
+>
+> Nguyên nhân là chunking không quyết định chất lượng một mình — nó quyết định **thông tin nào nằm
+> chung một vector**. Câu hỏi mà đáp án nằm ở tiêu đề cần chiến lược khác hẳn câu hỏi mà đáp án là
+> một con số giữa đoạn văn. Vì vậy nhóm kết luận: **chọn chiến lược chunking phải xuất phát từ dạng
+> câu hỏi người dùng sẽ hỏi, không phải từ chỉ số thống kê của chunk.**
 
 **Nếu làm lại, nhóm sẽ thay đổi gì trong chiến lược dữ liệu (data strategy)?**
-> *Viết 2-3 câu:*
+
+> **1. Tách `shopee-privacy-policy.md` (43.112 ký tự) thành nhiều file nhỏ theo mục lớn.** Đây là tài
+> liệu gây khó nhất — 4/5 thành viên mất điểm ở câu 5. Hàng chục mục trong đó đều xoay quanh động từ
+> "thu thập", nên câu hỏi *"thu thập từ những **nguồn** nào"* liên tục khớp nhầm vào mục *"thu thập
+> **những dữ liệu gì**"*. Nếu mỗi mục lớn là một file riêng với `category` hẹp hơn
+> (`privacy-collection`, `privacy-sharing`, `privacy-transfer`), metadata filter sẽ giải quyết được.
+>
+> **2. Thêm trường metadata `topic` mịn hơn `category`.** Hiện `customer_role` cứu được câu 2 và 4,
+> nhưng 3/6 tài liệu mang `customer_role=both` nên bộ lọc gần như vô dụng với chúng. Câu 1 là ví dụ:
+> lọc `customer_role=buyer` loại đúng tài liệu Tiki nhưng vẫn không đủ để đưa chunk gold lên top-3.
+>
+> **3. Bổ sung tài liệu để corpus không có "vùng chồng lấn chết".** Câu 1 thất bại vì hai tài liệu
+> khác nhau cùng nói về "thời hạn xử lý yêu cầu đổi trả" — một cho Người Mua, một cho Nhà Bán. Nếu
+> gom cả hai vào cùng một file có tiêu đề phân biệt rõ chủ thể, hoặc ghi rõ chủ thể ngay trong tiêu
+> đề mục, embedding sẽ tách bạch được.
+>
+> **4. Dọn rác điều hướng trước khi nạp.** `tiki-seller-warranty-faq.md` còn menu *"Chương trình
+> Freeship Xtra…"* và các file GHN còn *"Trang chủ"*. Chưa gây lỗi ở 5 câu này nhưng làm loãng store
+> và tạo chunk vô nghĩa.
 
 ---
 

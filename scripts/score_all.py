@@ -69,7 +69,15 @@ def available_members() -> list[str]:
     return found
 
 
-def score_member(member: str, embedder, llm_fn, top_k: int = 3) -> dict:
+LLM_ERROR_PREFIX = "[LỖI GỌI LLM"
+
+
+def retrieval_only_llm(prompt: str) -> str:
+    """Chế độ --no-llm: không gọi API, chỉ đánh dấu rằng vế 'agent trả lời' bị bỏ qua."""
+    return "(bỏ qua — chế độ chỉ chấm truy xuất)"
+
+
+def score_member(member: str, embedder, llm_fn, top_k: int = 3, use_llm: bool = True) -> dict:
     module = importlib.import_module(MEMBER_MODULES[member])
     store = build_store_for(member, module, embedder)
     agent = KnowledgeBaseAgent(store=store, llm_fn=llm_fn)
@@ -87,9 +95,15 @@ def score_member(member: str, embedder, llm_fn, top_k: int = 3) -> dict:
         doc_hit = expected_doc in [r["metadata"].get("doc_id") for r in results]
 
         answer = agent.answer(query, top_k=top_k)
-        refused = any(m in answer.lower() for m in REFUSAL_MARKERS)
+        llm_failed = answer.startswith(LLM_ERROR_PREFIX)
+        # Không có câu trả lời thật (lỗi API hoặc chế độ --no-llm) thì KHÔNG được phép
+        # coi là "agent trả lời sai" — chỉ chấm phần truy xuất.
+        graded_on_answer = use_llm and not llm_failed
+        refused = graded_on_answer and any(m in answer.lower() for m in REFUSAL_MARKERS)
 
-        if gold_rank == 1 and not refused:
+        if not graded_on_answer:
+            points = 2 if gold_rank == 1 else (1 if gold_rank is not None else 0)
+        elif gold_rank == 1 and not refused:
             points = 2
         elif gold_rank is not None and not refused:
             points = 1
@@ -105,6 +119,8 @@ def score_member(member: str, embedder, llm_fn, top_k: int = 3) -> dict:
                 "gold_rank": gold_rank,
                 "doc_hit": doc_hit,
                 "refused": refused,
+            "llm_failed": llm_failed,
+            "graded_on_answer": graded_on_answer,
                 "points": points,
                 "top1_doc": results[0]["metadata"].get("doc_id") if results else "-",
                 "top1_score": results[0]["score"] if results else 0.0,
@@ -118,14 +134,30 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--members", nargs="*", default=None)
     parser.add_argument("--top-k", type=int, default=3)
+    parser.add_argument(
+        "--save",
+        nargs="?",
+        const="report/BENCHMARK_RESULTS.md",
+        default=None,
+        metavar="ĐƯỜNG_DẪN",
+        help="Ghi kết quả ra file Markdown để đóng băng số liệu (mặc định: report/BENCHMARK_RESULTS.md)",
+    )
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Chỉ chấm phần TRUY XUẤT (tất định, không tốn quota API). Bỏ qua vế 'agent trả lời đúng'.",
+    )
     args = parser.parse_args()
 
     members = args.members or available_members()
     missing = [m for m in MEMBER_MODULES if m not in members]
 
     embedder = select_embedder()
-    raw_llm, llm_name = select_llm()
-    llm_fn = safe_llm(raw_llm)
+    if args.no_llm:
+        llm_fn, llm_name = retrieval_only_llm, "KHÔNG DÙNG (--no-llm, chỉ chấm truy xuất)"
+    else:
+        raw_llm, llm_name = select_llm()
+        llm_fn = safe_llm(raw_llm)
     print(f"Backend nhúng: {getattr(embedder, '_backend_name', type(embedder).__name__)}")
     print(f"Backend LLM  : {llm_name}")
     print(f"Chấm cho     : {', '.join(members)}")
@@ -135,7 +167,7 @@ def main() -> int:
     reports = []
     for member in members:
         print(f"\n===== {DISPLAY_NAMES.get(member, member)} =====")
-        report = score_member(member, embedder, llm_fn, top_k=args.top_k)
+        report = score_member(member, embedder, llm_fn, top_k=args.top_k, use_llm=not args.no_llm)
         reports.append(report)
         for row in report["rows"]:
             rank = row["gold_rank"] or "-"
@@ -167,7 +199,89 @@ def main() -> int:
     sizes = " | ".join(f"{r['size']}" for r in reports)
     print(f"| **Tổng** | | {totals} | |")
     print(f"| Số chunk | | {sizes} | |")
+
+    if args.save:
+        path = write_results_file(args.save, reports, embedder, llm_name, args.top_k)
+        print(f"\nĐã ghi kết quả vào {path}")
     return 0
+
+
+def write_results_file(
+    path_str: str, reports: list[dict], embedder, llm_name: str, top_k: int, no_llm: bool = False
+) -> Path:
+    """Đóng băng kết quả benchmark ra file Markdown để không phải chạy lại.
+
+    Retrieval là tất định (cùng embedder + chunker -> cùng gold_rank, cùng score), nhưng
+    câu trả lời của LLM thì không, và ai không có API key sẽ rơi về stub. File này giữ lại
+    số liệu của một lần chạy có đầy đủ cấu hình để cả nhóm trích dẫn chung.
+    """
+    from datetime import date
+
+    backend = getattr(embedder, "_backend_name", type(embedder).__name__)
+    lines: list[str] = [
+        "# Kết quả Benchmark — Nhóm F5 (số liệu đóng băng)",
+        "",
+        "> File này do `scripts/score_all.py --save` sinh ra. **Không sửa tay.**",
+        "> Chạy lại bằng: `python scripts/score_all.py --save`",
+        "",
+        f"- **Ngày chạy:** {date.today().isoformat()}",
+        f"- **Backend nhúng:** `{backend}`",
+        f"- **Backend LLM:** `{llm_name}`",
+        f"- **top_k:** {top_k}",
+        f"- **Corpus:** `{DATA_DIR}` (6 tài liệu)",
+        "",
+        "Retrieval là **tất định**: cùng embedder và cùng chunker luôn cho cùng `gold_rank` và cùng",
+        "điểm similarity — chạy lại bao nhiêu lần cũng ra đúng bảng này.",
+        "",
+        (
+            "> **Chế độ chỉ chấm TRUY XUẤT** (`--no-llm`): điểm dưới đây chỉ phản ánh chunk gold có ở "
+            "top-1/top-3 hay không. Vế *'agent trả lời chính xác'* của rubric CHƯA được kiểm chứng — "
+            "cần chạy lại có LLM khi hạn mức API hồi phục."
+            if no_llm
+            else "Câu trả lời của agent do LLM sinh; script chạy `temperature=0` để tái lập được."
+        ),
+        "",
+        "## Bảng tổng hợp",
+        "",
+        "| # | Câu hỏi | " + " | ".join(DISPLAY_NAMES.get(r["member"], r["member"]) for r in reports) + " |",
+        "|---|---------|" + "|".join(["---"] * len(reports)) + "|",
+    ]
+    for i in range(len(QUERIES)):
+        cells = []
+        for report in reports:
+            row = report["rows"][i]
+            rank = f"hạng {row['gold_rank']}" if row["gold_rank"] else "không có"
+            cells.append(f"{row['points']}/2 ({rank})")
+        lines.append(f"| {i + 1} | {QUERIES[i][0]} | " + " | ".join(cells) + " |")
+    lines.append("| **Tổng** | | " + " | ".join(f"**{r['total']}/10**" for r in reports) + " |")
+    lines.append("| Số chunk | | " + " | ".join(str(r["size"]) for r in reports) + " |")
+
+    lines += ["", "## Chi tiết từng thành viên", ""]
+    for report in reports:
+        name = DISPLAY_NAMES.get(report["member"], report["member"])
+        strategy = STRATEGY_NAMES.get(report["member"], "-")
+        lines += [
+            f"### {name} — `{strategy}`",
+            "",
+            f"Store: **{report['size']} chunk** · Tổng điểm: **{report['total']}/10**",
+            "",
+            "| Câu | gold_rank | top-1 doc_id | score | Điểm | Câu trả lời của agent |",
+            "|---|---|---|---|---|---|",
+        ]
+        for row in report["rows"]:
+            rank = row["gold_rank"] or "—"
+            answer = row["answer"].replace("|", "/")
+            note = " ⚠️ *từ chối trả lời*" if row["refused"] else ""
+            lines.append(
+                f"| {row['index']} | {rank} | `{row['top1_doc']}` | {row['top1_score']:+.4f} | "
+                f"**{row['points']}/2** | {answer}…{note} |"
+            )
+        lines.append("")
+
+    path = Path(path_str)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
 
 
 if __name__ == "__main__":

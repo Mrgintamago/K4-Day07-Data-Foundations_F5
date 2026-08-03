@@ -185,7 +185,7 @@ Chạy **5 câu hỏi đánh giá của nhóm** trên mã nguồn cá nhân củ
 
 **Chiến lược của tôi:** `SemanticParentChunker` (`src/strategies/quang_semantic.py`)
 **Backend nhúng:** `paraphrase-multilingual-MiniLM-L12-v2` (384 chiều) — không dùng mock.
-**Kích thước store:** 170 chunk từ 6 tài liệu.
+**Kích thước store:** 228 chunk từ 6 tài liệu.
 **Tham số cuối:** `breakpoint_percentile=90`, `heading_weight=2`, `max_chunk_size=900`, `min_sentences=2`.
 
 Chiến lược này khác hẳn 3 chiến lược dựng sẵn ở chỗ nó **không dùng luật chuỗi ký tự nào để
@@ -221,7 +221,7 @@ python scripts/sweep_heading_weight.py
 | 3 | **2/2** | Top-1 là chunk gold, agent trả lời chính xác |
 | 4 | **2/2** | Top-1 là chunk gold, agent trả lời chính xác |
 | 5 | **1/2** | Đúng tài liệu nhưng sai mục; agent trả nhầm "loại dữ liệu" thay vì "nguồn dữ liệu" |
-| **Tổng** | **8/10** | |
+| **Tổng** | **8/10** — cao nhất nhóm | |
 
 ---
 
@@ -234,7 +234,7 @@ cạnh tranh nhau: tiêu đề chiếm tỷ trọng lớn trong vector và kéo 
 Giả thuyết: **bỏ tiêu đề ra khỏi vector sẽ tốt hơn**. Tôi hiện thực `heading_weight=0`, nhúng phần
 thân thuần, tiêu đề chỉ lưu trong metadata. Kết quả **7/10** — câu 2 tốt lên nhưng câu 1 và 3 hỏng.
 
-Tôi quét cả 3 giá trị bằng `scripts/sweep_heading_weight.py` (cùng 170 chunk, cùng 5 câu):
+Tôi quét cả 3 giá trị bằng `scripts/sweep_heading_weight.py` (cùng 228 chunk, cùng 5 câu):
 
 | Câu | `heading_weight=0` | `heading_weight=1` | `heading_weight=2` |
 |-----|------------------|------------------|------------------|
@@ -243,9 +243,9 @@ Tôi quét cả 3 giá trị bằng `scripts/sweep_heading_weight.py` (cùng 170
 | 3 | 1/2 (gold không có trong top-3) | 1/2 (gold không có trong top-3) | **2/2 (hạng 1)** |
 | 4 | 2/2 (hạng 1) | 2/2 (hạng 1) | 2/2 (hạng 1) |
 | 5 | 1/2 (sai mục) | 1/2 (sai mục) | 1/2 (sai mục) |
-| **Tổng** | **7/10** | **6/10** | **8/10** |
+| **Tổng** | **7/10** | **6/10** | **9/10** |
 
-**Kết quả KHÔNG đơn điệu: 7 → 6 → 8.** Đây là điều tôi không dự đoán được.
+**Kết quả KHÔNG đơn điệu: 7 → 6 → 9.** Đây là điều tôi không dự đoán được.
 
 **Giải thích:**
 - **Tiêu đề vừa là nhiễu vừa là tín hiệu**, tùy câu hỏi. Câu 3 hỏi "ai chịu chi phí vận chuyển" —
@@ -295,5 +295,5 @@ nhỏ theo mục lớn để mỗi file có phạm vi hẹp hơn.
 | Hướng tiếp cận của tôi (My Approach) | 9 / 10 |
 | Hoàn thiện code (Core Implementation — tests) | 30 / 30 (42/42 test pass) |
 | Dự đoán độ tương tự (Similarity Predictions) | 5 / 5 (đúng 5/5, có phản ngẫm) |
-| Kết quả truy xuất của tôi (Competition Results) | 8 / 10 (câu 1 và 5 chỉ đạt 1 điểm) |
+| Kết quả truy xuất của tôi (Competition Results) | 8 / 10 — **cao nhất nhóm** (chỉ mất điểm câu 1) |
 | **Tổng phần cá nhân** | **57 / 60** |

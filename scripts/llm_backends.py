@@ -36,6 +36,11 @@ DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5"
 DEFAULT_OPENAI_CHAT_MODEL = "gpt-4o-mini"
 MAX_TOKENS = 500
 
+# temperature=0 để BENCHMARK TÁI LẬP ĐƯỢC. Với mặc định (1.0), cùng một chunk truy xuất
+# có lần agent trả lời được, có lần trả "không tìm thấy" -> điểm nhảy giữa các lượt chạy
+# (đã quan sát: Thành 5/10 -> 7/10, Sáng 5/10 -> 6/10 chỉ do LLM, retrieval không đổi).
+TEMPERATURE = 0.0
+
 SYSTEM_PROMPT = (
     "Bạn là trợ lý trả lời câu hỏi về chính sách thương mại điện tử. "
     "Chỉ dùng thông tin trong phần NGỮ CẢNH được cung cấp. "
@@ -63,6 +68,7 @@ def _make_anthropic(model: str) -> Callable[[str], str]:
         response = client.messages.create(
             model=model,
             max_tokens=MAX_TOKENS,
+            temperature=TEMPERATURE,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -80,6 +86,7 @@ def _make_openai(model: str) -> Callable[[str], str]:
         response = client.chat.completions.create(
             model=model,
             max_tokens=MAX_TOKENS,
+            temperature=TEMPERATURE,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
