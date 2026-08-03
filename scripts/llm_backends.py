@@ -82,16 +82,28 @@ def _make_openai(model: str) -> Callable[[str], str]:
 
     client = OpenAI()  # tự đọc OPENAI_API_KEY từ môi trường
 
+    messages = lambda prompt: [  # noqa: E731
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
+
+    # Dòng gpt-5 đổi tên tham số (`max_completion_tokens`) và không nhận `temperature`.
+    is_next_gen = model.startswith("gpt-5") or model.startswith("o1") or model.startswith("o3")
+
     def call(prompt: str) -> str:
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=MAX_TOKENS,
-            temperature=TEMPERATURE,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-        )
+        if is_next_gen:
+            response = client.chat.completions.create(
+                model=model,
+                max_completion_tokens=MAX_TOKENS,
+                messages=messages(prompt),
+            )
+        else:
+            response = client.chat.completions.create(
+                model=model,
+                max_tokens=MAX_TOKENS,
+                temperature=TEMPERATURE,
+                messages=messages(prompt),
+            )
         return (response.choices[0].message.content or "").strip()
 
     return call
